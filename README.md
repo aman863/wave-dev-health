@@ -16,9 +16,9 @@ A Claude Code plugin that keeps you healthy while you code. Tracks your coding s
 
 **Paste this into Claude Code:**
 
-> Run these 3 commands: `/plugin marketplace add aman863/wave-dev-health` then `/plugin install wave-dev-health@wave-dev-health` then `/reload-plugins`. After that, run `python3 ~/.claude/plugins/cache/wave-dev-health/wave-dev-health/0.1.0/scripts/analyze.py` and read ~/.wave-dev-health/profile.md and show me the full contents.
+> Install wave dev health: run `git clone https://github.com/aman863/wave-dev-health.git ~/.claude/skills/wave-dev-health && bash ~/.claude/skills/wave-dev-health/setup` then run `python3 ~/.claude/skills/wave-dev-health/scripts/analyze.py` and read the file at ~/.wave-dev-health/profile.md and show me its full contents.
 
-That's it. Claude installs the plugin, analyzes your coding history, and shows your health profile. Start a new session and the nudges begin automatically.
+That's it. Claude installs the skill, analyzes your coding history, and shows your health profile. `/pulse` works immediately. Background nudges begin in your next session.
 
 ## Commands
 

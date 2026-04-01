@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Wave Dev Health — setup
+# Creates skill symlink + registers background nudge hook
+set -e
+
+INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
+SETTINGS_FILE="$HOME/.claude/settings.json"
+STATE_DIR="$HOME/.wave-dev-health"
+SKILLS_DIR="$HOME/.claude/skills"
+SCRIPT_PATH="$INSTALL_DIR/plugins/wave-dev-health/scripts/wellness-check.sh"
+
+# ── Create skill symlink ─────────────────────────────────────────
+# Claude Code auto-discovers skills in ~/.claude/skills/*/SKILL.md
+SKILL_TARGET="$SKILLS_DIR/pulse"
+
+if [ -L "$SKILL_TARGET" ] || [ ! -e "$SKILL_TARGET" ]; then
+  ln -snf "$INSTALL_DIR/plugins/wave-dev-health/skills/pulse" "$SKILL_TARGET"
+  echo "  ✓ Linked /pulse skill"
+else
+  echo "  ✓ /pulse skill already exists"
+fi
+
+# ── Make scripts executable ──────────────────────────────────────
+chmod +x "$INSTALL_DIR/plugins/wave-dev-health/scripts/"*.sh 2>/dev/null || true
+
+# ── Register background nudge hook in settings.json ──────────────
+# UserPromptSubmit hook runs wellness-check.sh on every prompt
+python3 -c "
+import json, os
+
+f = '$SETTINGS_FILE'
+script = '$SCRIPT_PATH'
+
+try:
+    settings = json.load(open(f))
+except:
+    settings = {}
+
+if 'hooks' not in settings:
+    settings['hooks'] = {}
+
+# Check if our hook already exists
+existing = settings['hooks'].get('UserPromptSubmit', [])
+already_installed = any(
+    'wellness-check.sh' in str(h)
+    for h in existing
+)
+
+if not already_installed:
+    existing.append({
+        'matcher': '',
+        'hooks': [{
+            'type': 'command',
+            'command': f'bash \"{script}\"',
+            'timeout': 5
+        }]
+    })
+    settings['hooks']['UserPromptSubmit'] = existing
+    json.dump(settings, open(f, 'w'), indent=2)
+    print('  ✓ Registered background health nudge hook')
+else:
+    print('  ✓ Background hook already registered')
+" 2>/dev/null || echo "  ⚠ Could not register hook (update ~/.claude/settings.json manually)"
+
+# ── Create state directory ───────────────────────────────────────
+mkdir -p "$STATE_DIR/sessions"
+
+echo ""
+echo "  Wave Dev Health ready."
+echo "  /pulse works now. Background nudges start next session."
