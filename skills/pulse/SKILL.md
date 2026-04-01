@@ -13,14 +13,40 @@ A background hook (`UserPromptSubmit`) runs `scripts/wellness-check.sh` on every
 
 ## When you see [WAVE_HEALTH_NUDGE]
 
-Include the health tip in your response. Format it as a short, warm callout at the end of your main response:
+Include the health tip in your response. The format depends on the `tier` field:
 
+**Tier 1 (micro-nudge, every 20 min):** Ultra-light. One line at the end of your response. No box, no separator. Just a gentle inline note.
 ```
-[your normal response to the user's coding question]
+[your response]
+
+*Wave: {tip}*
+```
+
+**Tier 2 (light nudge, every 35 min):** Short callout. Two lines max.
+```
+[your response]
+
+---
+**Wave Health** | {session_duration_min}m in — {tip}
+```
+
+**Tier 3 (full nudge, every 50 min):** Full callout with actions.
+```
+[your response]
 
 ---
 **Wave Health** | {session_duration_min}m in — {tip}
 > Take a break: `/pulse break` | Snooze: `/pulse snooze 15m`
+```
+
+**Tier 4 (break nudge, 90+ min without break):** Urgent. Make it clear this matters.
+```
+[your response]
+
+---
+**Wave Health** | {session_duration_min}m straight — time for a real break.
+{tip}
+> **Log a break:** `/pulse break` | Snooze: `/pulse snooze 15m`
 ```
 
 If `energy_prompt: true` is in the nudge, also add:

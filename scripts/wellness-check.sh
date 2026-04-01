@@ -13,8 +13,23 @@ ENERGY_FILE="$STATE_DIR/energy.json"
 CONFIG_FILE="$STATE_DIR/config.json"
 PROMPT_LOG="$STATE_DIR/prompt_log.json"
 
-MIN_INTERVAL=1500    # 25 min — hard floor, never nudge more often than this
-SOFT_INTERVAL=3000   # 50 min — default nudge interval for normal sessions
+# ── Nudge tier intervals (based on health research) ──────────────
+# Different nudge types fire at different intervals. Lighter nudges
+# (eyes, hydration) come more often. Heavier ones (full break) less.
+#
+#   Tier 1 — Micro-nudge (eyes, breathing):   20 min  (20-20-20 rule)
+#   Tier 2 — Light nudge (hydration, posture): 35 min
+#   Tier 3 — Full nudge (stretch, movement):   50 min
+#   Tier 4 — Break nudge (stand up, walk):     90 min
+#
+# The script picks the HIGHEST tier that's due. If Tier 3 fires,
+# it replaces what would have been a Tier 1 nudge.
+
+TIER1_INTERVAL=1200   # 20 min — eyes, breathing (micro, 1 sentence)
+TIER2_INTERVAL=2100   # 35 min — hydration, posture (light, 1-2 sentences)
+TIER3_INTERVAL=3000   # 50 min — stretch, movement (full tip)
+TIER4_INTERVAL=5400   # 90 min — full break (stand up and walk)
+
 TODAY=$(date +%Y-%m-%d)
 NOW=$(date +%s)
 HOUR=$(date +%H)
@@ -71,55 +86,76 @@ ELAPSED_SINCE_BREAK=$(( NOW - LAST_BREAK ))
 SESSION_DURATION=$(( NOW - SESSION_START ))
 
 # ── Smart nudge decision ─────────────────────────────────────────
-# Instead of a single fixed timer, evaluate multiple signals.
-# Each signal can lower the threshold (nudge sooner) or raise it.
+# Evaluate tier thresholds + context signals on every prompt.
+# Pick the highest tier that's due. Context signals can promote
+# a tier (nudge sooner) or add urgency.
 
 SHOULD_NUDGE="false"
 NUDGE_REASON=""
+NUDGE_TIER=0
 
-# Hard floor: never nudge more often than MIN_INTERVAL
-if [ "$ELAPSED_SINCE_NUDGE" -lt "$MIN_INTERVAL" ]; then
-  # Too soon. Just update prompt count and exit.
-  TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
-  cat > "$TMPFILE" <<EOJSON
-{"version":1,"last_nudge":$LAST_NUDGE,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LAST_NUDGE_DATE","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PROMPT_COUNT}
-EOJSON
-  mv "$TMPFILE" "$STATE_FILE"
-  exit 0
+# Read custom interval overrides from config
+if [ -n "${CUSTOM_INTERVAL:-}" ]; then
+  TIER3_INTERVAL=$CUSTOM_INTERVAL
 fi
 
-# Signal 1: Standard interval elapsed (50 min default)
-if [ "$ELAPSED_SINCE_NUDGE" -ge "$SOFT_INTERVAL" ]; then
+# ── Tier selection: highest due tier wins ─────────────────────────
+
+# Tier 4: Full break (90 min without any break)
+if [ "$ELAPSED_SINCE_BREAK" -ge "$TIER4_INTERVAL" ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
+  NUDGE_TIER=4
+  NUDGE_REASON="full_break"
+fi
+
+# Tier 3: Full nudge (50 min since last nudge)
+if [ "$NUDGE_TIER" -lt 3 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER3_INTERVAL" ]; then
+  SHOULD_NUDGE="true"
+  NUDGE_TIER=3
   NUDGE_REASON="regular_interval"
 fi
 
-# Signal 2: Long session without any break (2+ hours since last break or session start)
-if [ "$ELAPSED_SINCE_BREAK" -ge 7200 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$MIN_INTERVAL" ]; then
+# Tier 2: Light nudge (35 min — hydration, posture)
+if [ "$NUDGE_TIER" -lt 2 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER2_INTERVAL" ]; then
   SHOULD_NUDGE="true"
-  NUDGE_REASON="long_no_break"
+  NUDGE_TIER=2
+  NUDGE_REASON="light_reminder"
 fi
 
-# Signal 3: High intensity — lots of prompts since last nudge (30+ prompts = intense session)
-# Read prompt count at last nudge to compute delta
-PROMPTS_SINCE_NUDGE=$PROMPT_COUNT  # Simplified: total prompts as proxy
-if [ "$PROMPTS_SINCE_NUDGE" -ge 30 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$MIN_INTERVAL" ]; then
-  # Reset prompt count after nudge, so this is actually prompts since last nudge
+# Tier 1: Micro-nudge (20 min — eyes, breathing)
+if [ "$NUDGE_TIER" -lt 1 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
+  NUDGE_TIER=1
+  NUDGE_REASON="micro_nudge"
+fi
+
+# ── Context signals: can override tier or add urgency ─────────────
+
+# High intensity (30+ prompts since last nudge) — promote to at least Tier 2
+if [ "$PROMPT_COUNT" -ge 30 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
+  SHOULD_NUDGE="true"
+  if [ "$NUDGE_TIER" -lt 2 ]; then
+    NUDGE_TIER=2
+  fi
   NUDGE_REASON="high_intensity"
 fi
 
-# Signal 4: Late night coding (after 11pm or before 5am) — nudge sooner (35 min)
+# Late night (after 11pm or before 5am) — promote to at least Tier 2
 if [ "$HOUR" -ge 23 ] || [ "$HOUR" -lt 5 ]; then
-  if [ "$ELAPSED_SINCE_NUDGE" -ge 2100 ]; then  # 35 min
-    SHOULD_NUDGE="true"
+  if [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ] && [ "$NUDGE_TIER" -ge 1 ]; then
+    if [ "$NUDGE_TIER" -lt 2 ]; then
+      NUDGE_TIER=2
+    fi
     NUDGE_REASON="late_night"
   fi
 fi
 
-# Signal 5: Break deficit — user has been ignoring nudges (3+ nudges, 0 breaks today)
-if [ "$TODAY_NUDGES" -ge 3 ] && [ "$TODAY_BREAKS" -eq 0 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$MIN_INTERVAL" ]; then
+# Break deficit (3+ nudges, 0 breaks today) — promote to at least Tier 3
+if [ "$TODAY_NUDGES" -ge 3 ] && [ "$TODAY_BREAKS" -eq 0 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
+  if [ "$NUDGE_TIER" -lt 3 ]; then
+    NUDGE_TIER=3
+  fi
   NUDGE_REASON="break_deficit"
 fi
 
@@ -135,45 +171,32 @@ fi
 
 # ── Time for a nudge! ────────────────────────────────────────────
 
-# Read tips
-TIP_COUNT=0
-if [ -f "$TIPS_FILE" ]; then
-  TIP_COUNT=$(grep -c '"text"' "$TIPS_FILE" 2>/dev/null || echo "0")
-fi
+# ── Select a tip matching the current tier ────────────────────────
+# Tips are tagged with tiers 1-4. Pick a random tip from the current
+# tier. If none match, fall back to any tip.
 
-# Select next tip (rotate through the list)
-if [ "$TIP_COUNT" -gt 0 ]; then
-  # Reset index if new day
-  if [ "$LAST_NUDGE_DATE" != "$TODAY" ]; then
-    LAST_TIP_INDEX=0
-  fi
-
-  NEXT_INDEX=$(( (LAST_TIP_INDEX + 1) % TIP_COUNT ))
-
-  # Extract the tip text at the given index
-  # tips.json is an array of objects with "text", "category", "body_area" fields
-  TIP_TEXT=$(python3 -c "
-import json, sys
+TIP_RESULT=$(python3 -c "
+import json, random
 try:
     tips = json.load(open('$TIPS_FILE'))
-    print(tips[$NEXT_INDEX]['text'])
+    tier_tips = [t for t in tips if t.get('tier', 3) == $NUDGE_TIER]
+    if not tier_tips:
+        tier_tips = tips  # fallback to any tip
+    tip = random.choice(tier_tips)
+    print(tip['text'])
+    print('---SEP---')
+    print(tip.get('category', 'general'))
 except:
     print('Take a moment to stretch and breathe. Your body will thank you.')
-" 2>/dev/null || echo "Take a moment to stretch and breathe. Your body will thank you.")
-
-  TIP_CATEGORY=$(python3 -c "
-import json, sys
-try:
-    tips = json.load(open('$TIPS_FILE'))
-    print(tips[$NEXT_INDEX].get('category', 'general'))
-except:
+    print('---SEP---')
     print('general')
-" 2>/dev/null || echo "general")
-else
-  NEXT_INDEX=0
-  TIP_TEXT="Take a moment to stretch and breathe. Your body will thank you."
-  TIP_CATEGORY="general"
-fi
+" 2>/dev/null || echo "Take a moment to stretch and breathe. Your body will thank you.
+---SEP---
+general")
+
+TIP_TEXT=$(echo "$TIP_RESULT" | head -1)
+TIP_CATEGORY=$(echo "$TIP_RESULT" | tail -1)
+NEXT_INDEX=$LAST_TIP_INDEX  # Not strictly sequential anymore, but keep for state compat
 
 # Calculate session duration
 SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
@@ -191,6 +214,7 @@ TODAY_BREAKS=$(grep -o '"today_breaks":[0-9]*' "$STATE_FILE" 2>/dev/null | grep 
 # ── Output the nudge (injected as system context to Claude) ──────
 
 OUTPUT="[WAVE_HEALTH_NUDGE]
+tier: ${NUDGE_TIER}
 session_duration_min: ${SESSION_MINUTES}
 nudge_reason: ${NUDGE_REASON}
 tip_category: ${TIP_CATEGORY}
