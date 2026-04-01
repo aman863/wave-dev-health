@@ -106,7 +106,9 @@ These appear only when relevant:
 - **`frustration_level: high`** + **`frustrated_prompts_in_row: N`** — User has been frustrated for N consecutive prompts. The longer the streak, the more important the break suggestion.
 - **`user_is_stuck: true`** — User explicitly expressed being stuck.
 - **`project_switched: true`** — User moved to a different codebase. Show `previous_project` and `current_project`.
-- **`returning_after_break: true`** — User came back after 30+ min away. Welcome them back warmly: "Welcome back. {break_duration_min} minutes away. Ready to go?"
+- **`auto_break_detected: true`** — User stepped away for 10+ minutes (gap between prompts). This IS the healthy behavior. Acknowledge it: "Good, you took a {break_duration_min}-minute break." Do NOT show a health tip when a break was just detected. The break is the win.
+- **`returning_after_break: true`** — User came back after 30+ min away. Welcome them back: "Welcome back. {away_duration_min} minutes away. Ready to go?"
+- **`current_unbroken_stretch_min: N`** — Minutes since last break. At 60+ min, mention it gently. At 90+ min, emphasize it. At 120+ min, make the break nudge hard to ignore.
 - **`burnout_warning: true`** — 7+ consecutive days. Show once per day.
 
 ## Commands

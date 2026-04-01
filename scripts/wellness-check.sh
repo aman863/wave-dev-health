@@ -121,13 +121,26 @@ PROMPT_COUNT=$((PROMPT_COUNT + 1))
 
 # ── Derived signals ──────────────────────────────────────────────
 ELAPSED_SINCE_NUDGE=$((NOW - LAST_NUDGE))
-ELAPSED_SINCE_BREAK=$((NOW - LAST_BREAK))
+# ELAPSED_SINCE_BREAK is computed AFTER auto-break detection below
 SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
 
 # Prompt gap (time since last prompt)
 PROMPT_GAP=0
 if [ "$LAST_PROMPT_TS" -gt 0 ]; then
   PROMPT_GAP=$((NOW - LAST_PROMPT_TS))
+fi
+
+# ── Auto-detect break from prompt gap ────────────────────────────
+# Same logic as analyze.py: 10+ min gap between messages = a break.
+# This replaces the old approach where breaks only counted from /pulse break.
+AUTO_BREAK="false"
+BREAK_GAP_MIN=0
+if [ "$PROMPT_GAP" -ge 600 ] && [ "$PROMPT_GAP" -lt 28800 ]; then
+  # 10 min to 8 hours = break (over 8 hours = probably a new day, not a break)
+  AUTO_BREAK="true"
+  BREAK_GAP_MIN=$((PROMPT_GAP / 60))
+  TODAY_BREAKS=$((TODAY_BREAKS + 1))
+  LAST_BREAK=$NOW  # Reset the break timer
 fi
 
 # Project switching detection
@@ -168,10 +181,17 @@ else
   FRUSTRATED_STREAK=0
 fi
 
-# Session returned after long gap (>30 min gap = "welcome back")
+# Session returned after long gap (>30 min = "welcome back")
 RETURNING_AFTER_BREAK="false"
 if [ "$PROMPT_GAP" -ge 1800 ] && [ "$PROMPT_GAP" -lt 28800 ]; then
   RETURNING_AFTER_BREAK="true"
+fi
+
+# Track continuous stretch (time since last auto-detected break)
+ELAPSED_SINCE_BREAK=$((NOW - LAST_BREAK))
+CURRENT_STRETCH=0
+if [ "$LAST_BREAK" -gt 0 ]; then
+  CURRENT_STRETCH=$(( ELAPSED_SINCE_BREAK / 60 ))
 fi
 
 # ── Log mood (append-only, for profile analysis) ─────────────────
@@ -340,11 +360,21 @@ previous_project: $(basename "$LAST_PROJECT")
 current_project: $(basename "$CURRENT_PROJECT")"
 fi
 
+if [ "$AUTO_BREAK" = "true" ]; then
+  OUTPUT="${OUTPUT}
+auto_break_detected: true
+break_duration_min: ${BREAK_GAP_MIN}"
+fi
+
 if [ "$RETURNING_AFTER_BREAK" = "true" ]; then
-  BREAK_DURATION_MIN=$((PROMPT_GAP / 60))
   OUTPUT="${OUTPUT}
 returning_after_break: true
-break_duration_min: ${BREAK_DURATION_MIN}"
+away_duration_min: ${BREAK_GAP_MIN}"
+fi
+
+if [ "$CURRENT_STRETCH" -gt 0 ]; then
+  OUTPUT="${OUTPUT}
+current_unbroken_stretch_min: ${CURRENT_STRETCH}"
 fi
 
 if [ "$BURNOUT_WARNING" = "true" ]; then
