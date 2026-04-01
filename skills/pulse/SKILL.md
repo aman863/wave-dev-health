@@ -30,6 +30,16 @@ Quick energy check — how are you feeling? `/pulse energy [1-5]`
 
 Do NOT interrupt the user's coding question to lead with the health tip. Answer their question first, then append the nudge.
 
+### Adapting tone to nudge_reason
+
+The `nudge_reason` field tells you WHY this nudge fired. Tailor your delivery:
+
+- **regular_interval** — Standard check-in. Casual, warm. "Been 50 min. Here's something for your eyes..."
+- **long_no_break** — 2+ hours without a break. More urgent but not preachy. "You've been going for over 2 hours straight. Your body is asking for a reset."
+- **high_intensity** — 30+ prompts in rapid succession. Intense session. "That was an intense sprint. Your hands and eyes just did a lot of work."
+- **late_night** — After 11pm or before 5am. Gentle, no judgment. "Late session. No judgment, but your sleep quality tonight depends on when you stop. Quick stretch while you think?"
+- **break_deficit** — 3+ nudges ignored today, zero breaks taken. Direct but respectful. "Third nudge today, zero breaks. I get it, you're locked in. But 60 seconds standing up will make the next hour better, not worse."
+
 ## Commands
 
 ### `/pulse`
