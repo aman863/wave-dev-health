@@ -1,0 +1,102 @@
+[
+  {
+    "text": "You've been typing for a while. Your forearm muscles tense up during long sessions. Try this: extend your arm, palm up, and gently pull your fingers back toward you for 15 seconds. Switch hands. That's a wrist flexor stretch.",
+    "category": "stretch",
+    "body_area": "wrists"
+  },
+  {
+    "text": "When you stare at code, your blink rate drops by up to 60%. Your eyes are drying out right now. Try the 20-20-20 rule: look at something 20 feet away for 20 seconds.",
+    "category": "eyes",
+    "body_area": "eyes"
+  },
+  {
+    "text": "Sitting for 90+ minutes reduces blood flow to your legs by nearly 50%. Stand up right now and do 10 calf raises. Takes 15 seconds.",
+    "category": "movement",
+    "body_area": "legs"
+  },
+  {
+    "text": "Debugging frustration triggers shallow chest breathing. Right now, take 3 slow belly breaths: inhale 4 seconds through your nose, expanding your stomach. Exhale 6 seconds through your mouth. Your nervous system will reset.",
+    "category": "mental",
+    "body_area": "breathing"
+  },
+  {
+    "text": "Your shoulders are probably up near your ears right now. Drop them. Roll them back 5 times, then forward 5 times. That tension was compressing your neck nerves.",
+    "category": "stretch",
+    "body_area": "shoulders"
+  },
+  {
+    "text": "Dehydration reduces cognitive performance by 12% before you even feel thirsty. Go drink a full glass of water right now. Your code will be better when you get back.",
+    "category": "hydration",
+    "body_area": "hydration"
+  },
+  {
+    "text": "Your hip flexors shorten when you sit. They're pulling your pelvis forward and compressing your lower back. Stand up, step one foot back, and sink into a lunge. Hold 20 seconds each side.",
+    "category": "stretch",
+    "body_area": "back"
+  },
+  {
+    "text": "Screen brightness should match your room. If your screen is the brightest thing in your field of vision, your pupils are constantly fighting. Reduce screen brightness or turn on a desk lamp.",
+    "category": "eyes",
+    "body_area": "eyes"
+  },
+  {
+    "text": "You might be death-gripping your mouse. Most people squeeze 3x harder than needed. Loosen your grip right now. Rest your hand on the mouse instead of clutching it. Your forearm muscles just exhaled.",
+    "category": "ergonomics",
+    "body_area": "wrists"
+  },
+  {
+    "text": "Your neck is probably tilted forward 15-30 degrees right now. Every inch of forward head posture adds 10 lbs of effective weight on your spine. Tuck your chin and push the back of your head straight up toward the ceiling.",
+    "category": "posture",
+    "body_area": "neck"
+  },
+  {
+    "text": "Coffee has a half-life of 5-6 hours. If it's after 2pm and you're reaching for another cup, that caffeine will still be at 50% strength at 8pm. Switch to water or herbal tea.",
+    "category": "hydration",
+    "body_area": "hydration"
+  },
+  {
+    "text": "Your thoracic spine (upper back) rounds forward when you code. Stand in a doorway, place your forearms on the frame, and lean through gently. Hold 20 seconds. Opens up your chest and reverses the hunch.",
+    "category": "stretch",
+    "body_area": "back"
+  },
+  {
+    "text": "Eye strain isn't about weakness, it's about the ciliary muscle locking up from constant close focus. Look out a window at the farthest thing you can see. Let your eyes relax to their natural resting point.",
+    "category": "eyes",
+    "body_area": "eyes"
+  },
+  {
+    "text": "If you've been sitting for over an hour, your glutes have essentially turned off. They're not firing anymore. Stand up, squeeze them hard for 10 seconds, release. Repeat 3 times. Welcome back, glutes.",
+    "category": "movement",
+    "body_area": "legs"
+  },
+  {
+    "text": "Wrist extension stretches are just as important as flexor stretches. Extend your arm, palm down, and gently press the back of your hand toward you. Hold 15 seconds each side.",
+    "category": "stretch",
+    "body_area": "wrists"
+  },
+  {
+    "text": "Mental fatigue isn't just 'being tired'. Your prefrontal cortex literally depletes glucose during intense focus. A 5-minute walk outside resets your executive function better than caffeine.",
+    "category": "mental",
+    "body_area": "mental"
+  },
+  {
+    "text": "Your diaphragm compresses when you slouch. You're taking in less oxygen per breath, which means less oxygen to your brain, which means worse code. Sit up tall for the next 10 minutes and notice the difference.",
+    "category": "posture",
+    "body_area": "breathing"
+  },
+  {
+    "text": "Quick desk exercise: place your palms flat on your desk, fingers forward. Lean your weight onto them gently, keeping arms straight. You should feel a stretch through your forearms and wrists. Hold 15 seconds.",
+    "category": "stretch",
+    "body_area": "wrists"
+  },
+  {
+    "text": "You've earned a real break. Not phone-scrolling, that's still screen time. Stand up, walk to a window, and just look outside for 60 seconds. Let your eyes, your brain, and your body all reset at once.",
+    "category": "mental",
+    "body_area": "mental"
+  },
+  {
+    "text": "Your body temperature drops slightly during long sitting sessions, which makes your muscles stiffer. Do 20 seconds of arm circles, big ones, to get blood flowing back to your extremities.",
+    "category": "movement",
+    "body_area": "shoulders"
+  }
+]
