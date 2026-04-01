@@ -13,16 +13,18 @@ Two hooks power this plugin:
 1. **SessionStart** runs `scripts/first-run.sh` once on the very first session. It scans the user's existing Claude Code session history and outputs a personalized welcome with their coding health profile.
 2. **UserPromptSubmit** runs `scripts/wellness-check.sh` on every user message. It reads the prompt text, checks timing, detects mood, and outputs a health nudge when conditions are met.
 
-## When you see [WAVE_HEALTH_WELCOME]
+## When you see PRESENT_PROFILE in Bash output
 
-This fires ONCE on the user's first session after installing the plugin. It contains an analysis of their existing Claude Code sessions.
+After the install script runs, the output ends with `PRESENT_PROFILE: /path/to/profile.md`. When you see this:
 
-**If `type: new_user`:** No session history found. Give a brief, warm welcome:
-"Wave Dev Health is running. I'll nudge you with health tips as you code. No setup needed. Try `/pulse dashboard` anytime to see your stats. Let's code."
+1. **Read the file** at the path shown using the Read tool.
+2. **Present the entire markdown content** to the user as your response. Do NOT summarize. Do NOT shorten. Show the full profile with all sections, tables, heatmaps, risks, and the "How Wave Dev Health Helps" section.
+3. This is the user's first impression of the plugin. It determines whether they keep it or uninstall. Show everything.
+4. After the profile, add: "Run `/reload-plugins` to activate the plugin, then start coding. The nudges will appear automatically."
 
-**If `type: returning_user_with_history`:** The analysis block contains their coding patterns. Follow the `instructions_for_claude` field to generate a personalized welcome. Make it feel like "whoa, it already knows me." This is the first impression — it determines whether they keep the plugin or uninstall it. Spend the effort to make it personal, specific, and warm.
+## When profile.md exists but hasn't been shown
 
-After presenting the welcome, respond normally to whatever the user's actual prompt was. The welcome is context, not a replacement for their request.
+If `~/.wave-dev-health/profile.md` exists and the user runs `/pulse` for the first time, read and present the profile as a welcome message before showing session stats.
 
 ## When you see [WAVE_HEALTH_NUDGE]
 
