@@ -14,15 +14,12 @@ A Claude Code plugin that keeps you healthy while you code. Tracks your coding s
 
 ## Install
 
+**One command (paste into Claude Code or terminal):**
 ```bash
-claude --plugin-dir /path/to/wave-dev-health
+git clone https://github.com/aman863/wave-dev-health.git ~/.wave-dev-health-plugin && bash ~/.wave-dev-health-plugin/install.sh
 ```
 
-Or clone and reference:
-```bash
-git clone https://github.com/aman863/wave-dev-health.git
-claude --plugin-dir ./wave-dev-health
-```
+That's it. The installer scans your coding history and shows your health profile instantly.
 
 ## Commands
 

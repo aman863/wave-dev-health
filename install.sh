@@ -1,7 +1,10 @@
 #!/bin/bash
-# Wave Dev Health — One-line installer
+# Wave Dev Health — Installer
 #
-# Usage:
+# Usage (in Claude Code or terminal):
+#   git clone https://github.com/aman863/wave-dev-health.git ~/.wave-dev-health-plugin && bash ~/.wave-dev-health-plugin/install.sh
+#
+# Or directly in terminal:
 #   curl -fsSL https://raw.githubusercontent.com/aman863/wave-dev-health/main/install.sh | bash
 
 set -euo pipefail
