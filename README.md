@@ -14,12 +14,17 @@ A Claude Code plugin that keeps you healthy while you code. Tracks your coding s
 
 ## Install
 
-**One command (paste into Claude Code or terminal):**
+**In Claude Code** — just say:
+> Install the wave dev health plugin from https://github.com/aman863/wave-dev-health
+
+Claude will clone the repo, read the SETUP.md, configure everything, analyze your coding history, and show your personalized health profile. No manual steps.
+
+**In your terminal** — one command:
 ```bash
 git clone https://github.com/aman863/wave-dev-health.git ~/.wave-dev-health-plugin && bash ~/.wave-dev-health-plugin/install.sh
 ```
 
-That's it. The installer scans your coding history and shows your health profile instantly.
+Either way, you'll see your coding health profile (sessions, patterns, risks) immediately. Then the plugin runs silently in the background.
 
 ## Commands
 
