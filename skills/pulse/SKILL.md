@@ -56,15 +56,43 @@ Quick energy check — how are you feeling? `/pulse energy [1-5]`
 
 Do NOT interrupt the user's coding question to lead with the health tip. Answer their question first, then append the nudge.
 
-### Adapting tone to nudge_reason
+### Adapting to nudge_reason
 
 The `nudge_reason` field tells you WHY this nudge fired. Tailor your delivery:
 
-- **regular_interval** — Standard check-in. Casual, warm. "Been 50 min. Here's something for your eyes..."
-- **long_no_break** — 2+ hours without a break. More urgent but not preachy. "You've been going for over 2 hours straight. Your body is asking for a reset."
-- **high_intensity** — 30+ prompts in rapid succession. Intense session. "That was an intense sprint. Your hands and eyes just did a lot of work."
-- **late_night** — After 11pm or before 5am. Gentle, no judgment. "Late session. No judgment, but your sleep quality tonight depends on when you stop. Quick stretch while you think?"
-- **break_deficit** — 3+ nudges ignored today, zero breaks taken. Direct but respectful. "Third nudge today, zero breaks. I get it, you're locked in. But 60 seconds standing up will make the next hour better, not worse."
+- **regular_interval** — Standard check-in. Casual, warm.
+- **light_reminder** — Hydration/posture check. Brief.
+- **micro_nudge** — Eyes/breathing. One sentence max.
+- **full_break** — 90+ min without a break. Urgent but not preachy.
+- **high_intensity** — 30+ prompts rapid fire. "That was an intense sprint."
+- **late_night** — After 11pm. Gentle. "Late session. Your sleep quality tonight depends on when you stop."
+- **deep_night** — 2-4am. More direct. "It's [time]. Everything you write now, you'll re-read tomorrow with fresh eyes and wonder why."
+- **break_deficit** — 3+ nudges, 0 breaks. "Third nudge, zero breaks. 60 seconds standing up will make the next hour better."
+- **frustration_detected** — User has been frustrated for 3+ consecutive prompts. DO NOT give a generic stretch tip. Instead: "You've been grinding on this for a while. When you're stuck, the answer almost never comes from staring harder. Step away for 5 minutes. Walk. The solution will be obvious when you sit back down." This is the most important nudge to get right.
+- **user_stuck** — User explicitly said they're stuck. Similar to frustration but more empathetic. "Being stuck is a signal, not a failure. Your brain is processing. A short walk gives your subconscious room to work."
+- **project_switch** — User switched codebases. "Context switch detected. Take a breath before diving into the new codebase. Your working memory needs a moment to flush."
+- **burnout_warning** — 7+ consecutive coding days. Once per day. "You've coded {consecutive_days} days straight. Rest days aren't laziness. They're when your brain consolidates what you learned."
+
+### Adapting to mood
+
+The `mood` field tells you the user's current emotional state detected from their prompt:
+
+- **frustrated** — They're fighting something. Don't give wrist stretches. Give them breathing exercises and permission to step away.
+- **stuck** — They said they're stuck. The health tip should be about taking a walk, not about hydration.
+- **debugging** — They're investigating an error. Eye strain tips are relevant (staring at stack traces). Breathing too.
+- **building** — Productive mode. Standard health tips are fine.
+- **shipping** — Deploying/committing. Brief nudge only, don't slow momentum.
+- **neutral** — Normal prompt. Standard tip rotation.
+
+### Conditional fields
+
+These appear only when relevant:
+
+- **`frustration_level: high`** + **`frustrated_prompts_in_row: N`** — User has been frustrated for N consecutive prompts. The longer the streak, the more important the break suggestion.
+- **`user_is_stuck: true`** — User explicitly expressed being stuck.
+- **`project_switched: true`** — User moved to a different codebase. Show `previous_project` and `current_project`.
+- **`returning_after_break: true`** — User came back after 30+ min away. Welcome them back warmly: "Welcome back. {break_duration_min} minutes away. Ready to go?"
+- **`burnout_warning: true`** — 7+ consecutive days. Show once per day.
 
 ## Commands
 
@@ -77,9 +105,16 @@ Read session state from `~/.wave-dev-health/state.json`. Show a quick session su
 
 Run this bash to read state:
 ```bash
-cat ~/.wave-dev-health/state.json 2>/dev/null || echo '{"version":1,"last_nudge":0,"session_start":0,"today_nudges":0,"today_breaks":0}'
+echo "=== STATE ==="
+cat ~/.wave-dev-health/state.json 2>/dev/null || echo '{}'
+echo "=== STREAK ==="
+cat ~/.wave-dev-health/streak.json 2>/dev/null || echo '{}'
+echo "=== SESSIONS ==="
 ls ~/.wave-dev-health/sessions/ 2>/dev/null | wc -l | tr -d ' '
+echo "=== ENERGY ==="
 cat ~/.wave-dev-health/energy.json 2>/dev/null || echo '[]'
+echo "=== MOOD (last 20) ==="
+tail -20 ~/.wave-dev-health/mood_log.jsonl 2>/dev/null || echo '[]'
 ```
 
 ### `/pulse stats`
