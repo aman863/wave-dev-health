@@ -210,77 +210,216 @@ dow_count = collections.Counter(s["dow"] for s in sessions)
 busiest = dow_count.most_common(1)[0]
 quietest = dow_count.most_common()[-1]
 
+# ── Compute extra stats ──────────────────────────────────────────
+
+# Total coding hours (rough: sum of session durations capped at 4h each)
+total_hours = round(sum(min(s["dur"], 240) for s in sessions) / 60)
+
+# Total prompts
+total_prompts = sum(s["msgs"] for s in sessions)
+
+# Avg session
+avg_dur = round(sum(s["dur"] for s in sessions) / total)
+
+# Day of week breakdown
+dow_sessions = collections.Counter(s["dow"] for s in sessions)
+dow_dur = collections.defaultdict(int)
+for s in sessions:
+    dow_dur[s["dow"]] += s["dur"]
+
+# Hour heatmap
+hour_counts = collections.Counter(s["hour"] for s in sessions)
+
+# Weekend stats
+wknd_pct = round(wknd / total * 100)
+
+# Long session stats
+long_pct = round(long / total * 100)
+very_long = sum(1 for s in sessions if s["dur"] > 180)
+
 # ── Print the profile ────────────────────────────────────────────
 
-print("  ┌──────────────────────────────────────────────────┐")
-print("  │          YOUR CODING HEALTH PROFILE              │")
-print("  └──────────────────────────────────────────────────┘")
 print("")
-print(f"  📊 {total} sessions over {span} days")
-print(f"     You coded {active_days} of those days ({round(active_days/span*100)}%)")
+print("  ╔════════════════════════════════════════════════════════════╗")
+print("  ║                                                          ║")
+print("  ║            YOUR CODING HEALTH PROFILE                    ║")
+print("  ║            Analyzed from your Claude Code history         ║")
+print("  ║                                                          ║")
+print("  ╚════════════════════════════════════════════════════════════╝")
+print("")
+print(f"  I just scanned {total} coding sessions over the last {span} days.")
+print(f"  That's ~{total_prompts:,} prompts and ~{total_hours} hours of coding.")
+print(f"  Here's what your coding habits look like from a health perspective:")
 print("")
 
-# Peak hours
+# ── Section 1: The Big Numbers ───────────────────────────────────
+print("  ── THE BIG NUMBERS ──────────────────────────────────────────")
+print("")
+print(f"    Sessions:          {total}")
+print(f"    Active days:       {active_days}/{span} ({round(active_days/span*100)}%)")
+print(f"    Total coding time: ~{total_hours} hours")
+print(f"    Avg session:       {avg_dur} min")
+print(f"    Longest streak:    {max_streak} days without a rest day")
+print("")
+
+# ── Section 2: When You Code ─────────────────────────────────────
+print("  ── WHEN YOU CODE ────────────────────────────────────────────")
+print("")
+
+# Hour heatmap (visual)
+print("    Hour of day:")
+max_h = max(hour_counts.values()) if hour_counts else 1
+for h in range(24):
+    c = hour_counts.get(h, 0)
+    if c > 0:
+        bar_len = int(c / max_h * 20)
+        bar = "█" * bar_len + "░" * (20 - bar_len)
+        label = ""
+        if h >= 23 or h < 5: label = "  ← late night"
+        elif 13 <= h <= 17: label = "  ← peak"
+        print(f"    {h:02d}:00  {bar}  {c:>3} sessions{label}")
+
+print("")
 peak_str = ", ".join(f"{h}:00" for h, _ in peak)
-print(f"  ⏰ Peak hours: {peak_str}")
-if late_pct > 10:
-    print(f"  🌙 {late_pct}% of sessions start after 11pm")
-if max_streak >= 5:
-    print(f"  🔥 Longest streak: {max_streak} days straight without rest")
+print(f"    Your peak:     {peak_str}")
+if late_pct > 0:
+    print(f"    Late night:    {late} sessions ({late_pct}%) start after 11pm")
+if wknd_pct > 0:
+    print(f"    Weekends:      {wknd} sessions ({wknd_pct}%)")
 print("")
 
-# Mood breakdown
+# Day of week
+print("    Day of week:")
+max_d = max(dow_sessions.values()) if dow_sessions else 1
+for day in ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]:
+    c = dow_sessions.get(day, 0)
+    d = dow_dur.get(day, 0)
+    bar_len = int(c / max_d * 15)
+    bar = "█" * bar_len + "░" * (15 - bar_len)
+    tag = " (weekend)" if day in ("Saturday","Sunday") else ""
+    print(f"    {day:<10} {bar}  {c:>3} sessions  ~{d//60}h{tag}")
+print("")
+
+# ── Section 3: Session Patterns ──────────────────────────────────
+print("  ── SESSION PATTERNS ─────────────────────────────────────────")
+print("")
+print("    Length distribution:")
+buckets = [(0,15,"< 15 min  "),(15,30,"15-30 min "),(30,60,"30-60 min "),
+           (60,120,"1-2 hours "),(120,180,"2-3 hours "),(180,9999,"3+ hours  ")]
+for lo, hi, label in buckets:
+    c = sum(1 for s in sessions if lo <= s["dur"] < hi)
+    pct = round(c / total * 100)
+    bar = "█" * (pct // 2) + "░" * (25 - pct // 2)
+    flag = ""
+    if lo >= 120 and c > 0: flag = "  ← no break?"
+    print(f"    {label}  {bar}  {c:>3} ({pct}%){flag}")
+print("")
+
+if long > 0:
+    print(f"    ⚠  {long} sessions ({long_pct}%) went over 2 hours without a break.")
+    print(f"       That's {long * 2} hours of unbroken sitting. Your back, eyes,")
+    print(f"       and wrists were under sustained load with zero recovery.")
+    print("")
+if very_long > 0:
+    print(f"    ⚠  {very_long} sessions went over 3 HOURS straight.")
+    print(f"       After 90 minutes of sitting, blood flow to your legs drops ~50%.")
+    print(f"       After 3 hours, your risk of blood clots measurably increases.")
+    print("")
+
+# ── Section 4: Your Mood at the Keyboard ─────────────────────────
+print("  ── YOUR MOOD AT THE KEYBOARD ────────────────────────────────")
+print("")
 build_pct = round(moods.get("building", 0) / total * 100)
 frust_pct = round(moods.get("frustrated", 0) / total * 100)
 ship_pct = round(moods.get("shipping", 0) / total * 100)
 mix_pct = round(moods.get("mixed", 0) / total * 100)
 
-print(f"  🔨 Building:    {build_pct}%  {'█' * (build_pct // 3)}")
-print(f"  🔄 Mixed:       {mix_pct}%  {'█' * (mix_pct // 3)}")
-print(f"  🚀 Shipping:    {ship_pct}%  {'█' * (ship_pct // 3)}")
-print(f"  😤 Frustrated:  {frust_pct}%  {'█' * (frust_pct // 3)}")
+print(f"    🔨 Building new things:  {build_pct}%  {'█' * (build_pct // 2)}")
+print(f"    🔄 Mixed/exploring:      {mix_pct}%  {'█' * (mix_pct // 2)}")
+print(f"    🚀 Shipping/deploying:   {ship_pct}%  {'█' * (ship_pct // 2)}")
+print(f"    😤 Frustrated/debugging: {frust_pct}%  {'█' * max(frust_pct // 2, 1 if frust_pct > 0 else 0)}")
 print("")
 
-# Key insight
 if frust_ratio > 2 and len(frust_s) > 2:
-    print(f"  ⚡ KEY INSIGHT: Your frustrated sessions last {frust_ratio}x longer")
-    print(f"     than building sessions. When you're stuck, you grind for hours.")
-    print(f"     That's the #1 thing this plugin will help with.")
-    print("")
-elif long > total * 0.1:
-    long_pct = round(long / total * 100)
-    print(f"  ⚡ KEY INSIGHT: {long_pct}% of your sessions go over 2 hours")
-    print(f"     without a break. That's where RSI and eye strain accumulate.")
-    print("")
-elif max_streak >= 7:
-    print(f"  ⚡ KEY INSIGHT: {max_streak} days straight with no rest day.")
-    print(f"     Rest is when your brain consolidates what you learned.")
+    print(f"    When you're building, avg session: {build_dur} min")
+    print(f"    When you're frustrated, avg session: {frust_dur} min")
+    print(f"    That's {frust_ratio}x longer. When you hit a wall, you don't stop.")
+    print(f"    You grind. For hours. This is where burnout lives.")
     print("")
 
-print("  ┌──────────────────────────────────────────────────┐")
-print("  │  WHAT HAPPENS NOW                                │")
-print("  ├──────────────────────────────────────────────────┤")
-print("  │                                                  │")
-print("  │  🟢 Micro eye-break nudges every 20 min          │")
-print("  │  💧 Hydration reminders every 35 min             │")
-print("  │  🧘 Full stretch tips every 50 min               │")
-print("  │  🚶 Break nudge at 90 min without a break        │")
-print("  │                                                  │")
-print("  │  😤 Frustration detected? Earlier intervention.  │")
-print("  │  🚀 Shipping mode? Quieter nudges.               │")
-print("  │  🌙 Late night? Gentler, more urgent.            │")
-print("  │                                                  │")
-print("  │  Commands:                                       │")
-print("  │    /pulse           → session stats              │")
-print("  │    /pulse dashboard → visual health board        │")
-print("  │    /pulse break     → log a break                │")
-print("  │    /pulse report    → weekly report              │")
-print("  │                                                  │")
-print("  │  All data stays local. Nothing leaves your       │")
-print("  │  machine. Ever.                                  │")
-print("  └──────────────────────────────────────────────────┘")
+# ── Section 5: Health Risks Detected ─────────────────────────────
+print("  ── HEALTH RISKS I SPOTTED ────────────────────────────────────")
 print("")
-print("  Powered by Wave — wave.so/health")
+
+risks = []
+if max_streak >= 7:
+    risks.append(f"    🔴 {max_streak}-day coding streak with no rest day.")
+    risks.append(f"       Your muscles, tendons, and brain need recovery days.")
+    risks.append(f"       Without rest, micro-damage accumulates into RSI and burnout.")
+if long_pct > 15:
+    risks.append(f"    🔴 {long_pct}% of sessions exceed 2 hours without a break.")
+    risks.append(f"       Prolonged sitting compresses your hip flexors, weakens glutes,")
+    risks.append(f"       dries your eyes, and tenses your forearms. Every hour.")
+if late_pct > 15:
+    risks.append(f"    🟡 {late_pct}% of sessions start after 11pm.")
+    risks.append(f"       Late coding = blue light exposure = suppressed melatonin")
+    risks.append(f"       = worse sleep = worse code tomorrow. A cycle.")
+if active_days / span > 0.9:
+    risks.append(f"    🟡 You code {round(active_days/span*100)}% of days. Almost no rest.")
+    risks.append(f"       High performers rest strategically. Rest days aren't laziness,")
+    risks.append(f"       they're when your brain consolidates learning.")
+if frust_ratio > 3 and len(frust_s) > 2:
+    risks.append(f"    🟡 Frustrated sessions last {frust_ratio}x longer than productive ones.")
+    risks.append(f"       When stuck for 30+ min, a 5-min walk solves problems faster")
+    risks.append(f"       than staring at the screen for 3 more hours.")
+if not risks:
+    risks.append("    🟢 No major risks detected. Let's keep it that way.")
+
+for r in risks:
+    print(r)
+print("")
+
+# ── Section 6: What This Plugin Does About It ────────────────────
+print("  ╔════════════════════════════════════════════════════════════╗")
+print("  ║  HOW WAVE DEV HEALTH WILL HELP                           ║")
+print("  ╠════════════════════════════════════════════════════════════╣")
+print("  ║                                                          ║")
+print("  ║  This plugin runs silently in the background. It reads   ║")
+print("  ║  your prompts, detects your mood, and nudges you with    ║")
+print("  ║  health tips at exactly the right moment.                ║")
+print("  ║                                                          ║")
+print("  ║  Not a dumb timer. It actually understands context:      ║")
+print("  ║                                                          ║")
+print("  ║  ┌─────────────────────────────────────────────────┐     ║")
+print("  ║  │ EVERY 20 MIN  Quick eye break (20-20-20 rule)   │     ║")
+print("  ║  │ EVERY 35 MIN  Hydration + posture check         │     ║")
+print("  ║  │ EVERY 50 MIN  Full stretch with specific tips    │     ║")
+print("  ║  │ AT 90 MIN     Stand up and walk. Non-negotiable. │     ║")
+print("  ║  └─────────────────────────────────────────────────┘     ║")
+print("  ║                                                          ║")
+print("  ║  SMART DETECTION:                                        ║")
+print("  ║  😤 Frustrated? Breathing exercises, not wrist stretches ║")
+print("  ║  🚀 Shipping? Brief nudges that don't break momentum     ║")
+print("  ║  🌙 2am session? \"Go to bed\" nudge, no judgment          ║")
+print("  ║  🔀 Switched projects? \"Take a breath before diving in\"  ║")
+print("  ║  📈 7+ days straight? Burnout early warning              ║")
+print("  ║                                                          ║")
+print("  ║  YOUR TOOLS:                                             ║")
+print("  ║  /pulse           Quick session stats + health score     ║")
+print("  ║  /pulse dashboard ASCII health board (screenshot-ready)  ║")
+print("  ║  /pulse break     Log a break + get a tip                ║")
+print("  ║  /pulse report    Weekly health report with insights     ║")
+print("  ║  /pulse energy N  Track your energy (1-5, optional)      ║")
+print("  ║  /pulse config    Adjust nudge timing + preferences      ║")
+print("  ║                                                          ║")
+print("  ║  📍 All data stays on your machine. Nothing sent anywhere.║")
+print("  ║  🧠 Uses Claude's own AI for personalized insights.      ║")
+print("  ║  ⚡ No API keys. No accounts. No setup. Just code.       ║")
+print("  ║                                                          ║")
+print("  ╚════════════════════════════════════════════════════════════╝")
+print("")
+print("  Powered by Wave — AI health companion")
+print("  wave.so/health")
 print("")
 
 PYEOF
