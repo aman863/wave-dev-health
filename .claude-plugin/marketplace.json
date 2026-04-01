@@ -6,8 +6,8 @@
   "plugins": [
     {
       "name": "wave-dev-health",
-      "source": ".",
-      "description": "Developer health companion. Background health nudges, session analysis, frustration detection. Powered by Wave.",
+      "source": "./plugins/wave-dev-health",
+      "description": "Developer health companion. Background health nudges, session analysis, frustration detection.",
       "version": "0.1.0"
     }
   ]

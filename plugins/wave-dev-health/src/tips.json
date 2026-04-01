@@ -1,0 +1,29 @@
+[
+  {"tier": 1, "text": "Look away from your screen. Find the farthest thing you can see. Stare at it for 20 seconds. Your ciliary muscles just unclenched.", "category": "eyes", "body_area": "eyes"},
+  {"tier": 1, "text": "Blink. 10 full, slow blinks right now. Your eyes are drier than you think.", "category": "eyes", "body_area": "eyes"},
+  {"tier": 1, "text": "One deep breath. In through your nose for 4 seconds. Out through your mouth for 6. That's it.", "category": "mental", "body_area": "breathing"},
+  {"tier": 1, "text": "Unclench your jaw. You were clenching it. Everyone does while coding.", "category": "posture", "body_area": "neck"},
+  {"tier": 1, "text": "Drop your shoulders. They were up near your ears again.", "category": "posture", "body_area": "shoulders"},
+  {"tier": 1, "text": "Check your screen brightness. If it's the brightest thing in your field of vision, turn it down or add a lamp.", "category": "eyes", "body_area": "eyes"},
+
+  {"tier": 2, "text": "Dehydration reduces cognitive performance by 12% before you even feel thirsty. Drink a glass of water.", "category": "hydration", "body_area": "hydration"},
+  {"tier": 2, "text": "Your neck is tilted forward right now. Every inch adds 10 lbs of force on your spine. Tuck your chin, push the back of your head toward the ceiling.", "category": "posture", "body_area": "neck"},
+  {"tier": 2, "text": "Coffee has a 5-6 hour half-life. If it's after 2pm, that cup will be at 50% strength at 8pm. Water might be the better call.", "category": "hydration", "body_area": "hydration"},
+  {"tier": 2, "text": "You're probably death-gripping your mouse. Loosen up. Rest your hand on it instead of clutching it.", "category": "ergonomics", "body_area": "wrists"},
+  {"tier": 2, "text": "Your diaphragm compresses when you slouch. Less oxygen per breath, less oxygen to your brain. Sit up tall for the next 10 minutes.", "category": "posture", "body_area": "breathing"},
+  {"tier": 2, "text": "Sip water. Your code quality correlates with hydration more than caffeine. Not a metaphor, your prefrontal cortex runs on glucose dissolved in water.", "category": "hydration", "body_area": "hydration"},
+
+  {"tier": 3, "text": "Your forearm muscles tense up during long sessions. Extend your arm, palm up, gently pull fingers back for 15 seconds. Switch hands. Wrist flexor stretch.", "category": "stretch", "body_area": "wrists"},
+  {"tier": 3, "text": "Roll your shoulders back 5 times, then forward 5 times. That tension was compressing your neck nerves.", "category": "stretch", "body_area": "shoulders"},
+  {"tier": 3, "text": "Your hip flexors shorten when you sit. Stand up, step one foot back, sink into a lunge. 20 seconds each side.", "category": "stretch", "body_area": "back"},
+  {"tier": 3, "text": "Wrist extension stretch: extend arm, palm down, press back of hand toward you. 15 seconds each side.", "category": "stretch", "body_area": "wrists"},
+  {"tier": 3, "text": "Quick desk exercise: palms flat on desk, fingers forward, lean weight onto them gently. You'll feel it through your forearms. 15 seconds.", "category": "stretch", "body_area": "wrists"},
+  {"tier": 3, "text": "Your thoracic spine rounds forward when you code. Stand in a doorway, forearms on frame, lean through. 20 seconds. Opens your chest.", "category": "stretch", "body_area": "back"},
+  {"tier": 3, "text": "20 seconds of big arm circles. Your body temp drops during long sitting and muscles stiffen. Get blood flowing.", "category": "movement", "body_area": "shoulders"},
+  {"tier": 3, "text": "Debugging frustration triggers shallow breathing. 3 belly breaths: inhale 4s through nose, exhale 6s through mouth. Nervous system reset.", "category": "mental", "body_area": "breathing"},
+
+  {"tier": 4, "text": "You've been sitting for 90+ minutes. Blood flow to your legs drops nearly 50%. Stand up. 10 calf raises. Walk to the window. 60 seconds minimum.", "category": "movement", "body_area": "legs"},
+  {"tier": 4, "text": "Real break time. Not phone-scrolling. Stand up, walk to a window, look outside for 60 seconds. Eyes, brain, and body all reset at once.", "category": "mental", "body_area": "mental"},
+  {"tier": 4, "text": "Your glutes turned off an hour ago. Stand up, squeeze them hard for 10 seconds, release. 3 times. Then walk around for a minute.", "category": "movement", "body_area": "legs"},
+  {"tier": 4, "text": "Mental fatigue isn't just being tired. Your prefrontal cortex depleted its glucose. A 5-minute walk outside resets executive function better than caffeine.", "category": "mental", "body_area": "mental"}
+]

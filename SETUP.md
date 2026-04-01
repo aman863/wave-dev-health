@@ -32,7 +32,7 @@ Use the Edit tool to make these changes. Preserve all existing settings.
 Run this to generate the user's health profile:
 
 ```bash
-python3 ~/.wave-dev-health-plugin/scripts/analyze.py
+python3 ~/.claude/plugins/marketplaces/wave-dev-health/scripts/analyze.py
 ```
 
 This creates `~/.wave-dev-health/profile.md`.
