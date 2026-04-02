@@ -18,15 +18,32 @@ STREAK_FILE="$STATE_DIR/streak.json"
 MOOD_FILE="$STATE_DIR/mood_log.jsonl"
 
 # ── Tier intervals ───────────────────────────────────────────────
-TIER1_INTERVAL=1200   # 20 min — eyes, breathing (micro)
-TIER2_INTERVAL=2100   # 35 min — hydration, posture (light)
-TIER3_INTERVAL=3000   # 50 min — stretch, movement (full)
-TIER4_INTERVAL=5400   # 90 min — full break (stand up, walk)
+# ── Debug mode ───────────────────────────────────────────────────
+# To test:  touch ~/.wave-dev-health/debug
+# To stop:  rm ~/.wave-dev-health/debug
+# Compresses all timers to seconds so nudges fire on every 2nd-5th prompt.
+DEBUG_MODE="false"
+if [ -f "$STATE_DIR/debug" ]; then
+  DEBUG_MODE="true"
+fi
 
-# ── Companion cooldowns ──────────────────────────────────────────
-COMPANION_COOLDOWN=300       # 5 min min gap between companion touches
-MOOD_SUPPORT_COOLDOWN=600    # 10 min between frustration support
-SUCCESS_COOLDOWN=300         # 5 min between success celebrations
+if [ "$DEBUG_MODE" = "true" ]; then
+  TIER1_INTERVAL=5      # 5 sec
+  TIER2_INTERVAL=10     # 10 sec
+  TIER3_INTERVAL=15     # 15 sec
+  TIER4_INTERVAL=20     # 20 sec
+  COMPANION_COOLDOWN=3
+  MOOD_SUPPORT_COOLDOWN=5
+  SUCCESS_COOLDOWN=3
+else
+  TIER1_INTERVAL=1200   # 20 min — eyes, breathing (micro)
+  TIER2_INTERVAL=2100   # 35 min — hydration, posture (light)
+  TIER3_INTERVAL=3000   # 50 min — stretch, movement (full)
+  TIER4_INTERVAL=5400   # 90 min — full break (stand up, walk)
+  COMPANION_COOLDOWN=300       # 5 min between companion touches
+  MOOD_SUPPORT_COOLDOWN=600    # 10 min between frustration support
+  SUCCESS_COOLDOWN=300         # 5 min between success celebrations
+fi
 
 TODAY=$(date +%Y-%m-%d)
 NOW=$(date +%s)
