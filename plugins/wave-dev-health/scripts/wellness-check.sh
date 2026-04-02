@@ -727,7 +727,7 @@ today_nudges: ${TODAY_NUDGES}
 today_breaks: ${TODAY_BREAKS}
 sass_level: ${SASS_LEVEL}
 body_battery: ${BODY_BATTERY}
-consecutive_coding_days: ${CONSECUTIVE_DAYS}
+coding_streak_days: ${CONSECUTIVE_DAYS}
 base_tip: ${TIP_TEXT}"
 
   # Cross-session context
@@ -799,7 +799,7 @@ first_prompt_of_session: true
 hour: $HOUR_NUM"
     if [ "$CONSECUTIVE_DAYS" -ge 3 ]; then
       OUTPUT="${OUTPUT}
-streak_days: $CONSECUTIVE_DAYS"
+coding_streak_days: $CONSECUTIVE_DAYS"
     fi
     SESSION_GREETED="true"
   fi
@@ -877,7 +877,7 @@ parallel_sessions: $PARALLEL_SESSIONS"
       [ "$DOW" -ge 6 ] && EXTRA="${EXTRA}
 weekend: true"
       [ "$CONSECUTIVE_DAYS" -ge 3 ] && EXTRA="${EXTRA}
-streak_days: $CONSECUTIVE_DAYS"
+coding_streak_days: $CONSECUTIVE_DAYS"
       [ "$RETURNING_AFTER_BREAK" = "true" ] && EXTRA="${EXTRA}
 returning: true
 away_min: $BREAK_GAP_MIN"

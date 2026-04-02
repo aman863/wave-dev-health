@@ -38,7 +38,7 @@ This is a lightweight emotional/session touch. It shows FIRST in your response, 
 - **late_night** — Gentle awareness. "10pm. Pace yourself tonight."
 - **deep_night** — Honest. "It's 2am. What's the minimum viable stopping point?"
 - **milestone** — Session check-in. "2 hours in. 1 break so far." / "3-hour session. 0 breaks. Your spine is keeping score."
-- **streak** — Streak acknowledgment. "Day 5 in a row." / "Day 7 straight. When's your rest day?"
+- **streak** — Coding streak milestone. `coding_streak_days` = consecutive calendar days with Claude Code usage. Present it clearly: "5-day coding streak." Not "Day 5" (ambiguous). At 7+ days, gently suggest a rest day.
 
 Never be preachy. Never guilt-trip. Sound like a friend who happens to notice things.
 
@@ -299,7 +299,8 @@ These appear only when relevant:
 - **`auto_break_detected: true`** — User stepped away for 10+ min. Celebrate this. No health tip needed.
 - **`returning_after_break: true`** — User came back after 30+ min. Welcome them back.
 - **`burnout_warning: true`** — 7+ consecutive coding days. Mention rest gently.
-- **`first_prompt_of_session: true`** — Greet them. Reference time of day and streak.
+- **`first_prompt_of_session: true`** — Greet them. Reference time of day and coding streak.
+- **`coding_streak_days: N`** — N consecutive calendar days with Claude Code usage. Say "N-day coding streak" not "Day N". At 7+, mention rest.
 
 ## Commands
 
