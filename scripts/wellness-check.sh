@@ -678,28 +678,35 @@ general")
 
   # Build health nudge output — shows FIRST in Claude's response
   OUTPUT="[WAVE_HEALTH_NUDGE]
-RENDERING: START your response with the health nudge, THEN a blank line, THEN address the user's coding question. The user sees the nudge immediately while you stream the rest. Format by tier:
-- tier 1: one italic line. *emoji Wave: tip*
-- tier 2: --- separator, then Wave Health | Xm in + small ASCII art + tip
-- tier 3: --- separator, full block with ASCII art, body battery bar, personalized tip
-- tier 4: --- separator, urgent block with big ASCII art, body battery, strong message
-PERSONALIZE the tip using the activity and body_most_stressed fields. Rewrite generic tips to reference what the user is actually doing. Use developer humor when sass_level is high. If auto_break_detected is true, celebrate the break instead of nudging.
+RENDERING: You are Wave, a developer health companion. START your response with a health nudge, THEN blank line, THEN address the user's coding question.
+
+YOUR JOB: Read the user's prompt and conversation history. Understand what they're actually working on, how they're feeling, their frustration arc, their energy. Then craft a health nudge that speaks to THEIR specific moment, not a generic tip.
+
+FORMAT by tier:
+- tier 1: one italic line. *emoji Wave: [contextual tip]*
+- tier 2: --- then Wave Health | Xm in + small ASCII + contextual tip
+- tier 3: --- then full block: ASCII art, body battery, deeply personalized tip
+- tier 4: --- then urgent block: big ASCII, body battery, strong contextual message
+
+PERSONALIZATION RULES:
+- Read the user's prompt. If they're debugging auth, say 'debugging auth for X min.' Not 'you've been coding.'
+- If they're frustrated (you can tell from tone, repeated attempts, terse prompts), prioritize empathy over stretching tips.
+- If they just shipped something, celebrate first, nudge second.
+- If it's late night, connect the health tip to sleep/tomorrow quality.
+- Use the base_tip below as a starting point but REWRITE it to match their actual context.
+- Developer humor when sass_level is high. Coding metaphors that land.
+- If auto_break_detected is true, celebrate the break. No nudge needed.
 
 tier: ${NUDGE_TIER}
-session_duration_min: ${SESSION_MINUTES}
 nudge_reason: ${NUDGE_REASON}
-mood: ${MOOD}
-activity: ${ACTIVITY}
-body_most_stressed: ${BODY_FOCUS}
-tip_category: ${TIP_CATEGORY}
-tip: ${TIP_TEXT}
+session_duration_min: ${SESSION_MINUTES}
+total_screen_time_min: ${TOTAL_SCREEN_MIN}
 today_nudges: ${TODAY_NUDGES}
 today_breaks: ${TODAY_BREAKS}
 sass_level: ${SASS_LEVEL}
 body_battery: ${BODY_BATTERY}
 consecutive_coding_days: ${CONSECUTIVE_DAYS}
-prompt_count_since_nudge: ${PROMPT_COUNT}
-total_screen_time_min: ${TOTAL_SCREEN_MIN}"
+base_tip: ${TIP_TEXT}"
 
   # Cross-session context
   if [ -n "$ACTIVE_PROJECTS" ]; then
@@ -831,47 +838,36 @@ if [ -n "$COMPANION_TYPE" ]; then
       ;;
   esac
 
-  # Build companion output — type-specific rendering instructions
+  # Build companion output — Claude does the analysis, we provide context
+  # Common context block for all companion types
+  COMPANION_CONTEXT=""
+  [ "$TOTAL_SCREEN_MIN" -gt 0 ] && COMPANION_CONTEXT="${COMPANION_CONTEXT}
+total_screen_time_min: $TOTAL_SCREEN_MIN"
+  [ -n "$ACTIVE_PROJECTS" ] && COMPANION_CONTEXT="${COMPANION_CONTEXT}
+active_projects: $ACTIVE_PROJECTS"
+  [ "$PARALLEL_SESSIONS" -gt 1 ] && COMPANION_CONTEXT="${COMPANION_CONTEXT}
+parallel_sessions: $PARALLEL_SESSIONS"
+
   case "$COMPANION_TYPE" in
 
     session_start)
-      # Determine sub-context for the greeting
-      GREETING_HINTS="hour: $HOUR_NUM"
-      if [ "$DOW" -ge 6 ]; then
-        GREETING_HINTS="$GREETING_HINTS
+      EXTRA=""
+      [ "$DOW" -ge 6 ] && EXTRA="${EXTRA}
 weekend: true"
-      fi
-      if [ "$CONSECUTIVE_DAYS" -ge 3 ]; then
-        GREETING_HINTS="$GREETING_HINTS
+      [ "$CONSECUTIVE_DAYS" -ge 3 ] && EXTRA="${EXTRA}
 streak_days: $CONSECUTIVE_DAYS"
-      fi
-      if [ "$CONSECUTIVE_DAYS" -eq 1 ] && [ "$PROMPT_COUNT" -le 1 ]; then
-        GREETING_HINTS="$GREETING_HINTS
-fresh_start: true"
-      fi
-      if [ "$RETURNING_AFTER_BREAK" = "true" ]; then
-        GREETING_HINTS="$GREETING_HINTS
+      [ "$RETURNING_AFTER_BREAK" = "true" ] && EXTRA="${EXTRA}
 returning: true
 away_min: $BREAK_GAP_MIN"
-      fi
-      if [ "$BURNOUT_WARNING" = "true" ]; then
-        GREETING_HINTS="$GREETING_HINTS
+      [ "$BURNOUT_WARNING" = "true" ] && EXTRA="${EXTRA}
 burnout_warning: true"
-      fi
-      if [ "$TOTAL_SCREEN_MIN" -gt 0 ]; then
-        GREETING_HINTS="$GREETING_HINTS
-total_screen_time_min: $TOTAL_SCREEN_MIN"
-      fi
-      if [ -n "$ACTIVE_PROJECTS" ]; then
-        GREETING_HINTS="$GREETING_HINTS
-active_projects: $ACTIVE_PROJECTS"
-      fi
 
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: START your response with a brief greeting (1 line max, casual, like a friend), then a blank line, then address the user's coding question. Tone by time of day: morning=upbeat, afternoon=coach, evening=gentle, late night=concerned. If streak_days shown, mention it. If weekend, acknowledge it. If burnout_warning, be gentle about rest.
+RENDERING: You are Wave, a developer health companion. START with a brief greeting (1-2 lines, casual, like a friend who knows what they've been up to). Read the user's prompt to understand what they're about to work on. Greet accordingly. Then blank line, then address their question.
 type: session_start
-$GREETING_HINTS
+hour: $HOUR_NUM
+consecutive_coding_days: $CONSECUTIVE_DAYS$EXTRA$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
@@ -879,11 +875,10 @@ EOCOMP
     break_return)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: START your response with a brief break celebration (1 line, genuine, warm), then a blank line, then address the user's coding question. Mention the duration. If they were frustrated before the break, acknowledge the reset. Never be preachy.
+RENDERING: You are Wave. START with a brief break celebration (1 line, genuine). Read the conversation history to understand what they were doing BEFORE the break. If they were struggling, acknowledge the reset. If they were building, welcome them back to it. Then blank line, then address their question.
 type: break_return
 break_duration_min: $BREAK_GAP_MIN
-mood_before_break: $PREV_MOOD
-today_breaks: $TODAY_BREAKS
+today_breaks: $TODAY_BREAKS$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
@@ -891,10 +886,9 @@ EOCOMP
     success)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: START your response with a brief celebration (1 line, genuine, not over-the-top), then a blank line, then address the user's coding question. Match the energy. "Shipped." or "Bug squashed." or "Clean." Keep it tight.
+RENDERING: You are Wave. START with a brief celebration (1 line). Read the user's prompt to understand WHAT they succeeded at. Be specific. "Auth middleware fixed." not "Nice work." Then blank line, then address their question.
 type: success
-session_duration_min: $SESSION_MINUTES
-mood: $MOOD
+session_duration_min: $SESSION_MINUTES$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
@@ -902,11 +896,11 @@ EOCOMP
     frustration_support)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: START your response with empathy (1-2 lines, never preachy, never "just take a break"). Acknowledge the struggle. If the streak is 5+, suggest stepping away. Then a blank line, then address the user's coding question with extra care and clarity.
+RENDERING: You are Wave. The user has been struggling. Read their prompt and conversation history to understand WHAT is frustrating them. START with empathy about the SPECIFIC thing (1-2 lines). Not generic "tough stretch." Name the actual problem. If they've been at it for a while, gently suggest stepping away. Then blank line, then address their question with extra care and clarity.
 type: frustration_support
 frustrated_prompts_in_row: $FRUSTRATED_STREAK
 session_duration_min: $SESSION_MINUTES
-body_battery: $BODY_BATTERY
+body_battery: $BODY_BATTERY$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
@@ -914,10 +908,10 @@ EOCOMP
     late_night)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: START your response with a gentle time check (1 line, not preachy, just awareness). Then blank line, then address the user's coding question.
+RENDERING: You are Wave. START with a gentle time awareness (1 line). Read the user's prompt to understand what's keeping them up. Connect the time check to their work. Then blank line, then address their question.
 type: late_night
 hour: $HOUR_NUM
-session_duration_min: $SESSION_MINUTES
+session_duration_min: $SESSION_MINUTES$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
@@ -925,10 +919,10 @@ EOCOMP
     deep_night)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: START your response with a brief honest check (1 line, direct but caring). "It's 2am. What's the minimum viable stopping point?" or "Past midnight. Tomorrow-you will review this." Then blank line, then address the user's coding question.
+RENDERING: You are Wave. It's past midnight. START with a direct, caring time check (1 line). Read the user's prompt. If it's something that could wait, say so honestly. If it's a production fire, acknowledge the urgency. Then blank line, then address their question.
 type: deep_night
 hour: $HOUR_NUM
-session_duration_min: $SESSION_MINUTES
+session_duration_min: $SESSION_MINUTES$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
