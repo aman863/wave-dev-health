@@ -297,34 +297,89 @@ fi
 if [ "$SHOULD_NUDGE" = "false" ]; then
   TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
   cat > "$TMPFILE" <<EOJSON
-{"version":2,"last_nudge":$LAST_NUDGE,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LAST_NUDGE_DATE","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PROMPT_COUNT,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK}
+{"version":2,"last_nudge":$LAST_NUDGE,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LAST_NUDGE_DATE","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PROMPT_COUNT,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LAST_BODY_AREA"}
 EOJSON
   mv "$TMPFILE" "$STATE_FILE"
   exit 0
 fi
 
-# ── Select tip matching tier ─────────────────────────────────────
+# ── Select tip with no-repeat logic ──────────────────────────────
+# Rules:
+#   1. Never repeat a tip until ALL tips in the tier have been shown
+#   2. Never show the same body area back-to-back
+#   3. Reset the shown list when a new day starts
+SHOWN_FILE="$STATE_DIR/shown_tips.json"
+LAST_BODY_AREA=""
+if [ -f "$STATE_FILE" ]; then
+  LAST_BODY_AREA=$(grep -o '"last_body_area":"[^"]*"' "$STATE_FILE" 2>/dev/null | grep -o '"[^"]*"$' | tr -d '"' || echo "")
+fi
+
 TIP_RESULT=$(python3 -c "
-import json, random
+import json, random, os
+
+tips_file = '$TIPS_FILE'
+shown_file = '$SHOWN_FILE'
+tier = $NUDGE_TIER
+today = '$TODAY'
+last_area = '$LAST_BODY_AREA'
+
 try:
-    tips = json.load(open('$TIPS_FILE'))
-    tier_tips = [t for t in tips if t.get('tier', 3) == $NUDGE_TIER]
-    if not tier_tips:
-        tier_tips = tips
-    tip = random.choice(tier_tips)
-    print(tip['text'])
-    print('---SEP---')
-    print(tip.get('category', 'general'))
+    all_tips = json.load(open(tips_file))
 except:
-    print('Take a moment to stretch and breathe. Your body will thank you.')
-    print('---SEP---')
-    print('general')
+    all_tips = []
+
+# Load shown tips (reset if new day)
+shown = {}
+try:
+    shown = json.load(open(shown_file))
+    if shown.get('date') != today:
+        shown = {'date': today, 'indices': []}
+except:
+    shown = {'date': today, 'indices': []}
+
+shown_indices = set(shown.get('indices', []))
+
+# Get tips for this tier
+tier_tips = [(i, t) for i, t in enumerate(all_tips) if t.get('tier', 3) == tier]
+if not tier_tips:
+    tier_tips = list(enumerate(all_tips))
+
+# Filter out already shown tips
+available = [(i, t) for i, t in tier_tips if i not in shown_indices]
+
+# If all shown, reset this tier's shown indices and start fresh
+if not available:
+    tier_indices = {i for i, t in tier_tips}
+    shown['indices'] = [x for x in shown['indices'] if x not in tier_indices]
+    available = tier_tips
+
+# Filter out same body area as last tip (if possible)
+if last_area and len(available) > 1:
+    diff_area = [(i, t) for i, t in available if t.get('body_area', '') != last_area]
+    if diff_area:
+        available = diff_area
+
+# Pick one
+idx, tip = random.choice(available)
+
+# Save shown state
+shown['indices'] = shown.get('indices', []) + [idx]
+json.dump(shown, open(shown_file, 'w'))
+
+print(tip['text'])
+print('---SEP---')
+print(tip.get('category', 'general'))
+print('---SEP---')
+print(tip.get('body_area', 'general'))
 " 2>/dev/null || echo "Take a moment to stretch and breathe. Your body will thank you.
+---SEP---
+general
 ---SEP---
 general")
 
-TIP_TEXT=$(echo "$TIP_RESULT" | head -1)
-TIP_CATEGORY=$(echo "$TIP_RESULT" | tail -1)
+TIP_TEXT=$(echo "$TIP_RESULT" | sed -n '1p')
+TIP_CATEGORY=$(echo "$TIP_RESULT" | sed -n '3p')
+TIP_BODY_AREA=$(echo "$TIP_RESULT" | sed -n '5p')
 
 TODAY_NUDGES=$((TODAY_NUDGES + 1))
 
@@ -405,7 +460,7 @@ echo "$OUTPUT"
 # ── Update state ─────────────────────────────────────────────────
 TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
 cat > "$TMPFILE" <<EOJSON
-{"version":2,"last_nudge":$NOW,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$TODAY","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":0,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK}
+{"version":2,"last_nudge":$NOW,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$TODAY","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":0,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$TIP_BODY_AREA"}
 EOJSON
 mv "$TMPFILE" "$STATE_FILE"
 
