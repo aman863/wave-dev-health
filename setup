@@ -69,16 +69,6 @@ else:
 # ── Create state directory ───────────────────────────────────────
 mkdir -p "$STATE_DIR/sessions"
 
-# ── Analyze coding history + open profile ────────────────────────
-echo "  Analyzing your coding sessions..."
-python3 "$INSTALL_DIR/scripts/analyze.py" 2>/dev/null
-
-PROFILE="$STATE_DIR/profile.html"
-if [ -f "$PROFILE" ]; then
-  open "$PROFILE" 2>/dev/null || xdg-open "$PROFILE" 2>/dev/null || true
-  echo "  ✓ Health profile opened in browser"
-fi
-
 echo ""
 echo "  Wave Dev Health ready."
 echo "  /pulse works now. Background nudges start next session."
