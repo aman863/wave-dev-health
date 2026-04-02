@@ -1,17 +1,11 @@
 #!/bin/bash
-# Wave Dev Health — Background wellness checker
-# Runs on EVERY UserPromptSubmit. Stdout is injected as system context to Claude.
+# Wave Dev Health — Wellness checker + companion
+# Runs on EVERY UserPromptSubmit. Stdout injected as system context to Claude.
 #
-# SIGNALS WE READ (every prompt):
-#   1. STDIN        — user's prompt text (mood, frustration, debugging keywords)
-#   2. Clock        — time of day, day of week, date
-#   3. State files  — session history, streaks, last nudge, breaks
-#   4. Environment  — CLAUDE_PROJECT_DIR (project switching detection)
-#   5. Prompt meta  — length, velocity, gaps between prompts
-#
-# WHAT WE OUTPUT (when nudge fires):
-#   A structured [WAVE_HEALTH_NUDGE] block injected into Claude's context.
-#   Claude reads it and weaves the nudge into its response.
+# OUTPUT MODES (priority order):
+#   1. [WAVE_HEALTH_NUDGE] — Timer-based health tip (shows FIRST in response)
+#   2. [WAVE_COMPANION]    — Lightweight emotional/session touch (1-2 lines, shows FIRST)
+#   3. Silent              — No output (most prompts)
 
 set -euo pipefail
 
@@ -29,6 +23,11 @@ TIER2_INTERVAL=2100   # 35 min — hydration, posture (light)
 TIER3_INTERVAL=3000   # 50 min — stretch, movement (full)
 TIER4_INTERVAL=5400   # 90 min — full break (stand up, walk)
 
+# ── Companion cooldowns ──────────────────────────────────────────
+COMPANION_COOLDOWN=300       # 5 min min gap between companion touches
+MOOD_SUPPORT_COOLDOWN=600    # 10 min between frustration support
+SUCCESS_COOLDOWN=300         # 5 min between success celebrations
+
 TODAY=$(date +%Y-%m-%d)
 NOW=$(date +%s)
 HOUR=$(date +%H)
@@ -37,12 +36,11 @@ DOW=$(date +%u)  # 1=Mon, 7=Sun
 mkdir -p "$STATE_DIR/sessions"
 
 # ── Read user's prompt from stdin ────────────────────────────────
-# The hook receives the user's prompt text via stdin.
 PROMPT_TEXT=""
 if [ -t 0 ]; then
   PROMPT_TEXT=""
 else
-  PROMPT_TEXT=$(head -c 2000 2>/dev/null || true)  # Cap at 2KB for speed
+  PROMPT_TEXT=$(head -c 2000 2>/dev/null || true)
 fi
 PROMPT_LEN=${#PROMPT_TEXT}
 PROMPT_LOWER=$(echo "$PROMPT_TEXT" | tr '[:upper:]' '[:lower:]')
@@ -52,8 +50,9 @@ MOOD="neutral"
 FRUSTRATION_SCORE=0
 IS_DEBUGGING="false"
 IS_STUCK="false"
+IS_SUCCESS="false"
 
-# Frustration signals (from actual session analysis patterns)
+# Frustration signals
 if echo "$PROMPT_LOWER" | grep -qE '(not working|still broken|same error|why is|what.s wrong|can.t figure|still not|keeps failing|again!|wtf|ugh|help me)'; then
   FRUSTRATION_SCORE=3
   MOOD="frustrated"
@@ -69,8 +68,9 @@ if echo "$PROMPT_LOWER" | grep -qE '(tried everything|no idea|stuck|confused|los
   MOOD="stuck"
 fi
 
-# Positive signals
-if echo "$PROMPT_LOWER" | grep -qE '(ship|deploy|push|commit|merge|looks good|works|done|perfect|great|let.s go)'; then
+# Success signals
+if echo "$PROMPT_LOWER" | grep -qE '(it works|fixed|nailed it|tests pass|all green|shipped|deployed|merged|done!|perfect|looks good|let.s go|lgtm|nice)'; then
+  IS_SUCCESS="true"
   if [ "$MOOD" = "neutral" ]; then MOOD="shipping"; fi
 fi
 if echo "$PROMPT_LOWER" | grep -qE '(add|create|implement|build|new feature|write|generate|design)'; then
@@ -82,59 +82,36 @@ if [ "$PROMPT_LEN" -lt 20 ] && [ "$PROMPT_LEN" -gt 0 ]; then
   FRUSTRATION_SCORE=$((FRUSTRATION_SCORE + 1))
 fi
 
-# ── Activity detection (what is the user actually doing?) ────────
-# This gets passed to Claude so it can personalize the tip to
-# the specific work, not just "take a break."
+# ── Activity detection ───────────────────────────────────────────
 ACTIVITY="general"
-BODY_FOCUS="general"  # which body part is most stressed right now
+BODY_FOCUS="general"
 
-# Testing = intense reading of output, eyes strain
 if echo "$PROMPT_LOWER" | grep -qE '(test|spec|assert|expect|coverage|mock|fixture|jest|vitest|bats|pytest)'; then
-  ACTIVITY="testing"
-  BODY_FOCUS="eyes"  # reading dense test output
+  ACTIVITY="testing"; BODY_FOCUS="eyes"
 fi
-
-# Code review / reading = sustained eye focus
 if echo "$PROMPT_LOWER" | grep -qE '(review|read|check|look at|what does|explain|understand|diff|pr )'; then
-  ACTIVITY="reviewing"
-  BODY_FOCUS="eyes"
+  ACTIVITY="reviewing"; BODY_FOCUS="eyes"
 fi
-
-# Writing code = wrist strain from typing
 if echo "$PROMPT_LOWER" | grep -qE '(write|implement|create|add.*function|add.*component|refactor|rename|extract|move)'; then
-  ACTIVITY="writing"
-  BODY_FOCUS="wrists"
+  ACTIVITY="writing"; BODY_FOCUS="wrists"
 fi
-
-# Debugging = tense posture + eye strain from scanning
 if [ "$IS_DEBUGGING" = "true" ] || echo "$PROMPT_LOWER" | grep -qE '(debug|fix|trace|log|inspect|stack|breakpoint|print)'; then
-  ACTIVITY="debugging"
-  BODY_FOCUS="eyes"  # scanning logs and stack traces
+  ACTIVITY="debugging"; BODY_FOCUS="eyes"
 fi
-
-# DevOps / config work = long periods of sitting still waiting
 if echo "$PROMPT_LOWER" | grep -qE '(deploy|docker|kubernetes|ci|cd|pipeline|build|config|env|nginx|server|aws|terraform)'; then
-  ACTIVITY="devops"
-  BODY_FOCUS="back"  # lots of waiting and sitting
+  ACTIVITY="devops"; BODY_FOCUS="back"
 fi
-
-# Design / CSS work = hunching forward to see pixels
 if echo "$PROMPT_LOWER" | grep -qE '(css|style|design|layout|color|font|padding|margin|responsive|animation|ui|ux)'; then
-  ACTIVITY="design"
-  BODY_FOCUS="neck"  # leaning in to see visual details
+  ACTIVITY="design"; BODY_FOCUS="neck"
 fi
-
-# Data work = reading tables and numbers
 if echo "$PROMPT_LOWER" | grep -qE '(database|query|sql|migration|schema|table|data|csv|json|api|fetch|request)'; then
-  ACTIVITY="data"
-  BODY_FOCUS="eyes"
+  ACTIVITY="data"; BODY_FOCUS="eyes"
 fi
 
-# ── Track rolling activity window (last 5 activities) ────────────
+# ── Rolling activity window ──────────────────────────────────────
 ACTIVITY_LOG="$STATE_DIR/activity.log"
 if [ "$PROMPT_LEN" -gt 0 ]; then
   echo "$NOW $ACTIVITY $BODY_FOCUS" >> "$ACTIVITY_LOG" 2>/dev/null || true
-  # Keep only last 20 entries
   if [ -f "$ACTIVITY_LOG" ]; then
     ALINES=$(wc -l < "$ACTIVITY_LOG" 2>/dev/null | tr -d ' ')
     if [ "$ALINES" -gt 20 ]; then
@@ -143,14 +120,10 @@ if [ "$PROMPT_LEN" -gt 0 ]; then
   fi
 fi
 
-# Summarize recent activity pattern
-RECENT_ACTIVITIES=""
 DOMINANT_FOCUS=""
 if [ -f "$ACTIVITY_LOG" ]; then
-  RECENT_ACTIVITIES=$(tail -5 "$ACTIVITY_LOG" 2>/dev/null | awk '{print $2}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
   DOMINANT_FOCUS=$(tail -5 "$ACTIVITY_LOG" 2>/dev/null | awk '{print $3}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
 fi
-# Use dominant if available, else current
 if [ -n "$DOMINANT_FOCUS" ] && [ "$DOMINANT_FOCUS" != "" ]; then
   BODY_FOCUS="$DOMINANT_FOCUS"
 fi
@@ -167,48 +140,81 @@ if [ -n "$CUSTOM_INTERVAL" ] && [ "$CUSTOM_INTERVAL" -gt 0 ] 2>/dev/null; then
   TIER3_INTERVAL=$CUSTOM_INTERVAL
 fi
 
-# ── Read state ───────────────────────────────────────────────────
+# ── Read state (single Python call, handles any JSON format) ─────
 LAST_NUDGE=0; LAST_TIP_INDEX=0; LAST_NUDGE_DATE=""; SESSION_START=0
 LAST_BREAK=0; TODAY_NUDGES=0; TODAY_BREAKS=0; PROMPT_COUNT=0
-LAST_PROJECT=""; LAST_PROMPT_TS=0; CONSECUTIVE_DAYS=0
-FRUSTRATED_STREAK=0; TOTAL_SESSIONS=0
+LAST_PROJECT=""; LAST_PROMPT_TS=0; FRUSTRATED_STREAK=0
+LAST_BODY_AREA=""; CLAUDE_DONE_TS=0
+SESSION_GREETED="false"; LAST_COMPANION_TS=0; LAST_MILESTONE_MIN=0
+LAST_LATE_HOUR=-1; LAST_SUCCESS_TS=0; LAST_MOOD_SUPPORT_TS=0
+STREAK_SHOWN=0; PREV_MOOD=""
 
 if [ -f "$STATE_FILE" ]; then
-  LAST_NUDGE=$(grep -o '"last_nudge":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  LAST_TIP_INDEX=$(grep -o '"last_tip_index":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  LAST_NUDGE_DATE=$(grep -o '"last_nudge_date":"[^"]*"' "$STATE_FILE" 2>/dev/null | grep -o '"[^"]*"$' | tr -d '"' || echo "")
-  SESSION_START=$(grep -o '"session_start":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  LAST_BREAK=$(grep -o '"last_break":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  PROMPT_COUNT=$(grep -o '"prompt_count":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  LAST_PROJECT=$(grep -o '"last_project":"[^"]*"' "$STATE_FILE" 2>/dev/null | grep -o '"[^"]*"$' | tr -d '"' || echo "")
-  LAST_PROMPT_TS=$(grep -o '"last_prompt_ts":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  FRUSTRATED_STREAK=$(grep -o '"frustrated_streak":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  if [ "$LAST_NUDGE_DATE" = "$TODAY" ]; then
-    TODAY_NUDGES=$(grep -o '"today_nudges":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-    TODAY_BREAKS=$(grep -o '"today_breaks":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  fi
+  eval "$(python3 -c "
+import json, sys
+today = '$TODAY'
+try:
+    d = json.load(open('$STATE_FILE'))
+except:
+    sys.exit(0)
+
+def p(var, val):
+    if isinstance(val, bool):
+        print(f\"{var}={'true' if val else 'false'}\")
+    elif isinstance(val, str):
+        safe = val.replace('\\\\', '').replace('\"', '').replace('\`', '').replace('\$', '')
+        print(f'{var}=\"{safe}\"')
+    else:
+        print(f'{var}={val}')
+
+p('LAST_NUDGE', d.get('last_nudge', 0))
+p('LAST_TIP_INDEX', d.get('last_tip_index', 0))
+p('LAST_NUDGE_DATE', d.get('last_nudge_date', ''))
+p('SESSION_START', d.get('session_start', 0))
+p('LAST_BREAK', d.get('last_break', 0))
+p('PROMPT_COUNT', d.get('prompt_count', 0))
+p('LAST_PROJECT', d.get('last_project', ''))
+p('LAST_PROMPT_TS', d.get('last_prompt_ts', 0))
+p('FRUSTRATED_STREAK', d.get('frustrated_streak', 0))
+p('LAST_BODY_AREA', d.get('last_body_area', ''))
+p('CLAUDE_DONE_TS', d.get('claude_done_ts', 0))
+p('SESSION_GREETED', d.get('session_greeted', False))
+p('LAST_COMPANION_TS', d.get('last_companion_ts', 0))
+p('LAST_MILESTONE_MIN', d.get('last_milestone_min', 0))
+p('LAST_LATE_HOUR', d.get('last_late_hour', -1))
+p('LAST_SUCCESS_TS', d.get('last_success_ts', 0))
+p('LAST_MOOD_SUPPORT_TS', d.get('last_mood_support_ts', 0))
+p('STREAK_SHOWN', d.get('streak_shown', 0))
+p('PREV_MOOD', d.get('prev_mood', ''))
+
+# Daily counters: only carry forward if same day
+nd = d.get('last_nudge_date', '')
+if nd == today:
+    p('TODAY_NUDGES', d.get('today_nudges', 0))
+    p('TODAY_BREAKS', d.get('today_breaks', 0))
+" 2>/dev/null)" || true
 fi
+
+# Safety: ensure all numeric vars are valid integers (guards against corrupt state)
+LAST_NUDGE=${LAST_NUDGE:-0}; SESSION_START=${SESSION_START:-0}
+LAST_BREAK=${LAST_BREAK:-0}; TODAY_NUDGES=${TODAY_NUDGES:-0}
+TODAY_BREAKS=${TODAY_BREAKS:-0}; PROMPT_COUNT=${PROMPT_COUNT:-0}
+LAST_PROMPT_TS=${LAST_PROMPT_TS:-0}; FRUSTRATED_STREAK=${FRUSTRATED_STREAK:-0}
+CLAUDE_DONE_TS=${CLAUDE_DONE_TS:-0}; LAST_COMPANION_TS=${LAST_COMPANION_TS:-0}
+LAST_MILESTONE_MIN=${LAST_MILESTONE_MIN:-0}; LAST_LATE_HOUR=${LAST_LATE_HOUR:--1}
+LAST_SUCCESS_TS=${LAST_SUCCESS_TS:-0}; LAST_MOOD_SUPPORT_TS=${LAST_MOOD_SUPPORT_TS:-0}
+STREAK_SHOWN=${STREAK_SHOWN:-0}; CONSECUTIVE_DAYS=${CONSECUTIVE_DAYS:-1}
 
 if [ "$SESSION_START" -eq 0 ]; then SESSION_START=$NOW; fi
 PROMPT_COUNT=$((PROMPT_COUNT + 1))
 
 # ── Derived signals ──────────────────────────────────────────────
 ELAPSED_SINCE_NUDGE=$((NOW - LAST_NUDGE))
-# ELAPSED_SINCE_BREAK is computed AFTER auto-break detection below
 SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
 
-# ── Compute ACTUAL idle time ──────────────────────────────────────
-# The time between user prompts includes Claude's processing time.
-# Claude might work for 15 min on a complex task. That's NOT a break.
-# Real idle time = now - when Claude FINISHED its last response.
+# ── Compute ACTUAL idle time (excludes Claude processing) ────────
+# Real idle = now - when Claude FINISHED its last response.
 # The Stop hook writes claude_done_ts to state.json.
-CLAUDE_DONE_TS=0
-if [ -f "$STATE_FILE" ]; then
-  CLAUDE_DONE_TS=$(grep -o '"claude_done_ts":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-fi
-
-# Use the LATER of: claude_done_ts or last_prompt_ts
-# (claude_done_ts is more accurate, but might not exist on first run)
 IDLE_REFERENCE=$LAST_PROMPT_TS
 if [ "$CLAUDE_DONE_TS" -gt "$LAST_PROMPT_TS" ]; then
   IDLE_REFERENCE=$CLAUDE_DONE_TS
@@ -219,12 +225,8 @@ if [ "$IDLE_REFERENCE" -gt 0 ]; then
   IDLE_TIME=$((NOW - IDLE_REFERENCE))
 fi
 
-# Backward compat: PROMPT_GAP still used for some signals
-PROMPT_GAP=$IDLE_TIME
-
 # ── Auto-detect break from ACTUAL idle time ──────────────────────
-# 10+ min of REAL idle time (after Claude finished) = a break.
-# NOT 10+ min between prompts (which might just be Claude working).
+# 10+ min of REAL idle (after Claude finished) = a break.
 AUTO_BREAK="false"
 BREAK_GAP_MIN=0
 if [ "$IDLE_TIME" -ge 600 ] && [ "$IDLE_TIME" -lt 28800 ]; then
@@ -234,28 +236,26 @@ if [ "$IDLE_TIME" -ge 600 ] && [ "$IDLE_TIME" -lt 28800 ]; then
   LAST_BREAK=$NOW
 fi
 
-# Project switching detection
+# Project switching
 CURRENT_PROJECT="${CLAUDE_PROJECT_DIR:-unknown}"
 PROJECT_SWITCHED="false"
 if [ -n "$LAST_PROJECT" ] && [ "$LAST_PROJECT" != "$CURRENT_PROJECT" ] && [ "$LAST_PROJECT" != "unknown" ]; then
   PROJECT_SWITCHED="true"
 fi
 
-# Consecutive days tracking
+# ── Consecutive days (streak) ────────────────────────────────────
 if [ -f "$STREAK_FILE" ]; then
   CONSECUTIVE_DAYS=$(grep -o '"consecutive_days":[0-9]*' "$STREAK_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
   LAST_ACTIVE_DATE=$(grep -o '"last_active_date":"[^"]*"' "$STREAK_FILE" 2>/dev/null | grep -o '"[^"]*"$' | tr -d '"' || echo "")
   if [ "$LAST_ACTIVE_DATE" = "$TODAY" ]; then
     : # already counted today
   else
-    # Check if yesterday was active
     YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null || echo "")
     if [ "$LAST_ACTIVE_DATE" = "$YESTERDAY" ]; then
       CONSECUTIVE_DAYS=$((CONSECUTIVE_DAYS + 1))
     else
-      CONSECUTIVE_DAYS=1  # streak broken
+      CONSECUTIVE_DAYS=1
     fi
-    # Update streak file
     TMPFILE=$(mktemp "$STATE_DIR/streak.XXXXXX")
     echo "{\"consecutive_days\":$CONSECUTIVE_DAYS,\"last_active_date\":\"$TODAY\"}" > "$TMPFILE"
     mv "$TMPFILE" "$STREAK_FILE"
@@ -265,31 +265,35 @@ else
   echo "{\"consecutive_days\":1,\"last_active_date\":\"$TODAY\"}" > "$STREAK_FILE"
 fi
 
-# Frustrated streak (consecutive frustrated prompts)
+# Frustrated streak
 if [ "$FRUSTRATION_SCORE" -ge 2 ]; then
   FRUSTRATED_STREAK=$((FRUSTRATED_STREAK + 1))
 else
   FRUSTRATED_STREAK=0
 fi
 
-# Session returned after long gap (>30 min = "welcome back")
+# Returning after long gap
 RETURNING_AFTER_BREAK="false"
-if [ "$PROMPT_GAP" -ge 1800 ] && [ "$PROMPT_GAP" -lt 28800 ]; then
+if [ "$IDLE_TIME" -ge 1800 ] && [ "$IDLE_TIME" -lt 28800 ]; then
   RETURNING_AFTER_BREAK="true"
 fi
 
-# Track continuous stretch (time since last auto-detected break)
+# Current unbroken stretch
 ELAPSED_SINCE_BREAK=$((NOW - LAST_BREAK))
 CURRENT_STRETCH=0
 if [ "$LAST_BREAK" -gt 0 ]; then
-  CURRENT_STRETCH=$(( ELAPSED_SINCE_BREAK / 60 ))
+  CURRENT_STRETCH=$((ELAPSED_SINCE_BREAK / 60))
 fi
 
-# ── Log mood (append-only, for profile analysis) ─────────────────
-# Only log every 5th prompt to keep file small
+# Burnout signal
+BURNOUT_WARNING="false"
+if [ "$CONSECUTIVE_DAYS" -ge 7 ] && [ "$TODAY_NUDGES" -eq 0 ]; then
+  BURNOUT_WARNING="true"
+fi
+
+# ── Log mood (every 5th prompt) ──────────────────────────────────
 if [ $((PROMPT_COUNT % 5)) -eq 0 ] && [ "$PROMPT_LEN" -gt 0 ]; then
   echo "{\"ts\":$NOW,\"mood\":\"$MOOD\",\"frust\":$FRUSTRATION_SCORE,\"len\":$PROMPT_LEN,\"proj\":\"$(basename "$CURRENT_PROJECT")\"}" >> "$MOOD_FILE" 2>/dev/null || true
-  # Rotate mood log (keep last 500 entries)
   if [ -f "$MOOD_FILE" ]; then
     LINES=$(wc -l < "$MOOD_FILE" 2>/dev/null | tr -d ' ')
     if [ "$LINES" -gt 500 ]; then
@@ -298,12 +302,85 @@ if [ $((PROMPT_COUNT % 5)) -eq 0 ] && [ "$PROMPT_LEN" -gt 0 ]; then
   fi
 fi
 
-# ── Smart nudge decision ─────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# COMPANION TRIGGER DETECTION
+# Lightweight touches for moments between health nudges.
+# Priority: break_return > frustration > success > session_start
+#           > late_night > milestone > streak
+# ═══════════════════════════════════════════════════════════════════
+COMPANION_TYPE=""
+
+# 1. Break return — always celebrate (bypasses cooldown)
+if [ "$AUTO_BREAK" = "true" ]; then
+  COMPANION_TYPE="break_return"
+fi
+
+# 2. Frustration support — 3+ frustrated prompts, 10-min cooldown
+if [ -z "$COMPANION_TYPE" ] && [ "$FRUSTRATED_STREAK" -ge 3 ]; then
+  if [ $((NOW - LAST_MOOD_SUPPORT_TS)) -ge "$MOOD_SUPPORT_COOLDOWN" ]; then
+    COMPANION_TYPE="frustration_support"
+  fi
+fi
+
+# 3. Success celebration — 5-min cooldown
+if [ -z "$COMPANION_TYPE" ] && [ "$IS_SUCCESS" = "true" ]; then
+  if [ $((NOW - LAST_SUCCESS_TS)) -ge "$SUCCESS_COOLDOWN" ]; then
+    COMPANION_TYPE="success"
+  fi
+fi
+
+# 4. Session start — first prompt of session or returning after long gap
+if [ -z "$COMPANION_TYPE" ] && [ "$SESSION_GREETED" = "false" ]; then
+  if [ "$PROMPT_COUNT" -le 1 ] || [ "$RETURNING_AFTER_BREAK" = "true" ]; then
+    COMPANION_TYPE="session_start"
+  fi
+fi
+
+# 5. Late night crossing — fire once per hour boundary (22, 23, 0, 1, 2)
+if [ -z "$COMPANION_TYPE" ]; then
+  HOUR_NUM=$((10#$HOUR))  # force decimal (no octal from leading zero)
+  if [ "$HOUR_NUM" -ge 22 ] && [ "$LAST_LATE_HOUR" -lt 22 ]; then
+    COMPANION_TYPE="late_night"
+  elif [ "$HOUR_NUM" -ge 23 ] && [ "$LAST_LATE_HOUR" -lt 23 ]; then
+    COMPANION_TYPE="late_night"
+  elif [ "$HOUR_NUM" -le 2 ] && [ "$HOUR_NUM" -ge 0 ] && [ "$LAST_LATE_HOUR" -lt 24 ]; then
+    COMPANION_TYPE="deep_night"
+  elif [ "$HOUR_NUM" -ge 1 ] && [ "$HOUR_NUM" -le 4 ] && [ "$LAST_LATE_HOUR" -lt "$HOUR_NUM" ]; then
+    COMPANION_TYPE="deep_night"
+  fi
+fi
+
+# 6. Session milestone — every 60 min of session time
+if [ -z "$COMPANION_TYPE" ]; then
+  NEXT_MILESTONE=$(( (LAST_MILESTONE_MIN / 60 + 1) * 60 ))
+  if [ "$SESSION_MINUTES" -ge "$NEXT_MILESTONE" ] && [ "$NEXT_MILESTONE" -ge 60 ]; then
+    COMPANION_TYPE="milestone"
+  fi
+fi
+
+# 7. Streak milestone — at day 3, 5, 7, 14, 30 (once per session)
+if [ -z "$COMPANION_TYPE" ] && [ "$PROMPT_COUNT" -le 1 ]; then
+  for SC in 3 5 7 14 30; do
+    if [ "$CONSECUTIVE_DAYS" -ge "$SC" ] && [ "$STREAK_SHOWN" -lt "$SC" ]; then
+      COMPANION_TYPE="streak"
+      break
+    fi
+  done
+fi
+
+# ── General companion cooldown (break_return + frustration bypass) ──
+if [ -n "$COMPANION_TYPE" ] && [ "$COMPANION_TYPE" != "break_return" ] && [ "$COMPANION_TYPE" != "frustration_support" ]; then
+  if [ "$LAST_COMPANION_TS" -gt 0 ] && [ $((NOW - LAST_COMPANION_TS)) -lt "$COMPANION_COOLDOWN" ]; then
+    COMPANION_TYPE=""  # too soon, suppress
+  fi
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# HEALTH NUDGE DECISION (existing tier system)
+# ═══════════════════════════════════════════════════════════════════
 SHOULD_NUDGE="false"
 NUDGE_REASON=""
 NUDGE_TIER=0
-
-# ── Tier selection: highest due tier wins ─────────────────────────
 
 # Tier 4: Full break (90 min without any break)
 if [ "$ELAPSED_SINCE_BREAK" -ge "$TIER4_INTERVAL" ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
@@ -325,87 +402,103 @@ if [ "$NUDGE_TIER" -lt 1 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; 
   SHOULD_NUDGE="true"; NUDGE_TIER=1; NUDGE_REASON="micro_nudge"
 fi
 
-# ── Context signals: promote tier or trigger early ────────────────
-
-# Frustration detected — if frustrated for 3+ consecutive prompts, promote
+# ── Context promotions ───────────────────────────────────────────
 if [ "$FRUSTRATED_STREAK" -ge 3 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
   if [ "$NUDGE_TIER" -lt 3 ]; then NUDGE_TIER=3; fi
   NUDGE_REASON="frustration_detected"
 fi
 
-# Stuck signal — user explicitly says they're stuck
 if [ "$IS_STUCK" = "true" ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
   if [ "$NUDGE_TIER" -lt 3 ]; then NUDGE_TIER=3; fi
   NUDGE_REASON="user_stuck"
 fi
 
-# High intensity (30+ prompts since last nudge)
 if [ "$PROMPT_COUNT" -ge 30 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
   if [ "$NUDGE_TIER" -lt 2 ]; then NUDGE_TIER=2; fi
   NUDGE_REASON="high_intensity"
 fi
 
-# Late night (after 11pm or before 5am)
-if [ "$HOUR" -ge 23 ] || [ "$HOUR" -lt 5 ]; then
+HOUR_NUM=$((10#$HOUR))
+if [ "$HOUR_NUM" -ge 23 ] || [ "$HOUR_NUM" -lt 5 ]; then
   if [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ] && [ "$NUDGE_TIER" -ge 1 ]; then
     if [ "$NUDGE_TIER" -lt 2 ]; then NUDGE_TIER=2; fi
     NUDGE_REASON="late_night"
   fi
 fi
 
-# Deep night (2am-4am) — always promote to Tier 3
-if [ "$HOUR" -ge 2 ] && [ "$HOUR" -lt 5 ]; then
+if [ "$HOUR_NUM" -ge 2 ] && [ "$HOUR_NUM" -lt 5 ]; then
   if [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ] && [ "$NUDGE_TIER" -ge 1 ]; then
     if [ "$NUDGE_TIER" -lt 3 ]; then NUDGE_TIER=3; fi
     NUDGE_REASON="deep_night"
   fi
 fi
 
-# Break deficit (3+ nudges, 0 breaks today)
 if [ "$TODAY_NUDGES" -ge 3 ] && [ "$TODAY_BREAKS" -eq 0 ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
   if [ "$NUDGE_TIER" -lt 3 ]; then NUDGE_TIER=3; fi
   NUDGE_REASON="break_deficit"
 fi
 
-# Burnout signal: 7+ consecutive coding days
-BURNOUT_WARNING="false"
-if [ "$CONSECUTIVE_DAYS" -ge 7 ] && [ "$TODAY_NUDGES" -eq 0 ]; then
-  BURNOUT_WARNING="true"
-fi
-
-# Project switch detected — always worth a micro-nudge
 if [ "$PROJECT_SWITCHED" = "true" ] && [ "$ELAPSED_SINCE_NUDGE" -ge "$TIER1_INTERVAL" ]; then
   SHOULD_NUDGE="true"
   if [ "$NUDGE_TIER" -lt 1 ]; then NUDGE_TIER=1; fi
   NUDGE_REASON="project_switch"
 fi
 
-# ── Not time yet? Update state and exit ──────────────────────────
-if [ "$SHOULD_NUDGE" = "false" ]; then
+# ═══════════════════════════════════════════════════════════════════
+# OUTPUT ROUTING
+# Health nudge wins over companion. Companion wins over silence.
+# ═══════════════════════════════════════════════════════════════════
+
+# Helper: compute common fields
+SASS_LEVEL="friendly"
+if [ "$TODAY_NUDGES" -ge 6 ] && [ "$TODAY_BREAKS" -eq 0 ]; then
+  SASS_LEVEL="roast"
+elif [ "$TODAY_NUDGES" -ge 3 ] && [ "$TODAY_BREAKS" -eq 0 ]; then
+  SASS_LEVEL="sarcastic"
+fi
+
+BODY_BATTERY="good"
+if [ "$CURRENT_STRETCH" -ge 120 ]; then
+  BODY_BATTERY="critical"
+elif [ "$CURRENT_STRETCH" -ge 90 ]; then
+  BODY_BATTERY="low"
+elif [ "$CURRENT_STRETCH" -ge 60 ]; then
+  BODY_BATTERY="medium"
+fi
+
+# Helper: write state to file
+write_state() {
+  local SG="$1"   # session_greeted
+  local LCT="$2"  # last_companion_ts
+  local LMM="$3"  # last_milestone_min
+  local LLH="$4"  # last_late_hour
+  local LST="$5"  # last_success_ts
+  local LMST="$6" # last_mood_support_ts
+  local SS="$7"   # streak_shown
+  local LN="$8"   # last_nudge
+  local LND="$9"  # last_nudge_date
+  local PC="${10}" # prompt_count
+  local LBA="${11}" # last_body_area
+
   TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
   cat > "$TMPFILE" <<EOJSON
-{"version":2,"last_nudge":$LAST_NUDGE,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LAST_NUDGE_DATE","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PROMPT_COUNT,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LAST_BODY_AREA"}
+{"version":3,"last_nudge":$LN,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LND","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PC,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LBA","session_greeted":$SG,"last_companion_ts":$LCT,"last_milestone_min":$LMM,"last_late_hour":$LLH,"last_success_ts":$LST,"last_mood_support_ts":$LMST,"streak_shown":$SS,"prev_mood":"$MOOD"}
 EOJSON
   mv "$TMPFILE" "$STATE_FILE"
-  exit 0
-fi
+}
 
-# ── Select tip with no-repeat logic ──────────────────────────────
-# Rules:
-#   1. Never repeat a tip until ALL tips in the tier have been shown
-#   2. Never show the same body area back-to-back
-#   3. Reset the shown list when a new day starts
-SHOWN_FILE="$STATE_DIR/shown_tips.json"
-LAST_BODY_AREA=""
-if [ -f "$STATE_FILE" ]; then
-  LAST_BODY_AREA=$(grep -o '"last_body_area":"[^"]*"' "$STATE_FILE" 2>/dev/null | grep -o '"[^"]*"$' | tr -d '"' || echo "")
-fi
+# ─────────────────────────────────────────────────────────────────
+# PATH A: Health nudge fires
+# ─────────────────────────────────────────────────────────────────
+if [ "$SHOULD_NUDGE" = "true" ]; then
 
-TIP_RESULT=$(python3 -c "
+  # Select tip with no-repeat logic
+  SHOWN_FILE="$STATE_DIR/shown_tips.json"
+  TIP_RESULT=$(python3 -c "
 import json, random, os
 
 tips_file = '$TIPS_FILE'
@@ -419,7 +512,6 @@ try:
 except:
     all_tips = []
 
-# Load shown tips (reset if new day)
 shown = {}
 try:
     shown = json.load(open(shown_file))
@@ -429,31 +521,22 @@ except:
     shown = {'date': today, 'indices': []}
 
 shown_indices = set(shown.get('indices', []))
-
-# Get tips for this tier
 tier_tips = [(i, t) for i, t in enumerate(all_tips) if t.get('tier', 3) == tier]
 if not tier_tips:
     tier_tips = list(enumerate(all_tips))
 
-# Filter out already shown tips
 available = [(i, t) for i, t in tier_tips if i not in shown_indices]
-
-# If all shown, reset this tier's shown indices and start fresh
 if not available:
     tier_indices = {i for i, t in tier_tips}
     shown['indices'] = [x for x in shown['indices'] if x not in tier_indices]
     available = tier_tips
 
-# Filter out same body area as last tip (if possible)
 if last_area and len(available) > 1:
     diff_area = [(i, t) for i, t in available if t.get('body_area', '') != last_area]
     if diff_area:
         available = diff_area
 
-# Pick one
 idx, tip = random.choice(available)
-
-# Save shown state
 shown['indices'] = shown.get('indices', []) + [idx]
 json.dump(shown, open(shown_file, 'w'))
 
@@ -462,20 +545,27 @@ print('---SEP---')
 print(tip.get('category', 'general'))
 print('---SEP---')
 print(tip.get('body_area', 'general'))
-" 2>/dev/null || echo "Take a moment to stretch and breathe. Your body will thank you.
+" 2>/dev/null || echo "Take a moment to stretch and breathe.
 ---SEP---
 general
 ---SEP---
 general")
 
-TIP_TEXT=$(echo "$TIP_RESULT" | sed -n '1p')
-TIP_CATEGORY=$(echo "$TIP_RESULT" | sed -n '3p')
-TIP_BODY_AREA=$(echo "$TIP_RESULT" | sed -n '5p')
+  TIP_TEXT=$(echo "$TIP_RESULT" | sed -n '1p')
+  TIP_CATEGORY=$(echo "$TIP_RESULT" | sed -n '3p')
+  TIP_BODY_AREA=$(echo "$TIP_RESULT" | sed -n '5p')
 
-TODAY_NUDGES=$((TODAY_NUDGES + 1))
+  TODAY_NUDGES=$((TODAY_NUDGES + 1))
 
-# ── Build output ─────────────────────────────────────────────────
-OUTPUT="[WAVE_HEALTH_NUDGE]
+  # Build health nudge output — shows FIRST in Claude's response
+  OUTPUT="[WAVE_HEALTH_NUDGE]
+RENDERING: START your response with the health nudge, THEN a blank line, THEN address the user's coding question. The user sees the nudge immediately while you stream the rest. Format by tier:
+- tier 1: one italic line. *emoji Wave: tip*
+- tier 2: --- separator, then Wave Health | Xm in + small ASCII art + tip
+- tier 3: --- separator, full block with ASCII art, body battery bar, personalized tip, and /pulse snooze option
+- tier 4: --- separator, urgent block with big ASCII art, body battery, strong message
+PERSONALIZE the tip using the activity and body_most_stressed fields. Rewrite generic tips to reference what the user is actually doing. Use developer humor when sass_level is high. If auto_break_detected is true, celebrate the break instead of nudging.
+
 tier: ${NUDGE_TIER}
 session_duration_min: ${SESSION_MINUTES}
 nudge_reason: ${NUDGE_REASON}
@@ -486,75 +576,269 @@ tip_category: ${TIP_CATEGORY}
 tip: ${TIP_TEXT}
 today_nudges: ${TODAY_NUDGES}
 today_breaks: ${TODAY_BREAKS}
+sass_level: ${SASS_LEVEL}
+body_battery: ${BODY_BATTERY}
 consecutive_coding_days: ${CONSECUTIVE_DAYS}
 prompt_count_since_nudge: ${PROMPT_COUNT}"
 
-# Conditional fields
-if [ "$FRUSTRATION_SCORE" -ge 2 ]; then
-  OUTPUT="${OUTPUT}
+  # Conditional fields
+  if [ "$FRUSTRATION_SCORE" -ge 2 ]; then
+    OUTPUT="${OUTPUT}
 frustration_level: high
 frustrated_prompts_in_row: ${FRUSTRATED_STREAK}"
-fi
+  fi
 
-if [ "$IS_STUCK" = "true" ]; then
-  OUTPUT="${OUTPUT}
+  if [ "$IS_STUCK" = "true" ]; then
+    OUTPUT="${OUTPUT}
 user_is_stuck: true"
-fi
+  fi
 
-if [ "$PROJECT_SWITCHED" = "true" ]; then
-  OUTPUT="${OUTPUT}
+  if [ "$PROJECT_SWITCHED" = "true" ]; then
+    OUTPUT="${OUTPUT}
 project_switched: true
 previous_project: $(basename "$LAST_PROJECT")
 current_project: $(basename "$CURRENT_PROJECT")"
-fi
+  fi
 
-if [ "$AUTO_BREAK" = "true" ]; then
-  OUTPUT="${OUTPUT}
+  if [ "$AUTO_BREAK" = "true" ]; then
+    OUTPUT="${OUTPUT}
 auto_break_detected: true
 break_duration_min: ${BREAK_GAP_MIN}"
-fi
+  fi
 
-if [ "$RETURNING_AFTER_BREAK" = "true" ]; then
-  OUTPUT="${OUTPUT}
+  if [ "$RETURNING_AFTER_BREAK" = "true" ]; then
+    OUTPUT="${OUTPUT}
 returning_after_break: true
 away_duration_min: ${BREAK_GAP_MIN}"
-fi
-
-if [ "$CURRENT_STRETCH" -gt 0 ]; then
-  OUTPUT="${OUTPUT}
-current_unbroken_stretch_min: ${CURRENT_STRETCH}"
-fi
-
-if [ "$BURNOUT_WARNING" = "true" ]; then
-  OUTPUT="${OUTPUT}
-burnout_warning: true
-consecutive_days: ${CONSECUTIVE_DAYS}"
-fi
-
-# Energy prompt (first nudge of new day)
-if [ "$LAST_NUDGE_DATE" != "$TODAY" ]; then
-  HAS_ENERGY_TODAY="false"
-  if [ -f "$ENERGY_FILE" ]; then
-    HAS_ENERGY_TODAY=$(grep -c "\"$TODAY\"" "$ENERGY_FILE" 2>/dev/null | grep -v '^0$' > /dev/null 2>&1 && echo "true" || echo "false")
   fi
-  if [ "$HAS_ENERGY_TODAY" = "false" ]; then
+
+  if [ "$CURRENT_STRETCH" -gt 0 ]; then
     OUTPUT="${OUTPUT}
-energy_prompt: true"
+current_unbroken_stretch_min: ${CURRENT_STRETCH}"
   fi
-fi
 
-OUTPUT="${OUTPUT}
+  if [ "$BURNOUT_WARNING" = "true" ]; then
+    OUTPUT="${OUTPUT}
+burnout_warning: true"
+  fi
+
+  if [ "$LAST_NUDGE_DATE" != "$TODAY" ]; then
+    HAS_ENERGY_TODAY="false"
+    if [ -f "$ENERGY_FILE" ]; then
+      HAS_ENERGY_TODAY=$(grep -c "\"$TODAY\"" "$ENERGY_FILE" 2>/dev/null | grep -v '^0$' > /dev/null 2>&1 && echo "true" || echo "false")
+    fi
+    if [ "$HAS_ENERGY_TODAY" = "false" ]; then
+      OUTPUT="${OUTPUT}
+energy_prompt: true"
+    fi
+  fi
+
+  # If this is the first prompt, include greeting hint so Claude also greets
+  if [ "$SESSION_GREETED" = "false" ]; then
+    OUTPUT="${OUTPUT}
+first_prompt_of_session: true
+hour: $HOUR_NUM"
+    if [ "$CONSECUTIVE_DAYS" -ge 3 ]; then
+      OUTPUT="${OUTPUT}
+streak_days: $CONSECUTIVE_DAYS"
+    fi
+    SESSION_GREETED="true"
+  fi
+
+  OUTPUT="${OUTPUT}
 snooze_command: /pulse snooze 15m
 break_command: /pulse break
 [/WAVE_HEALTH_NUDGE]"
 
-echo "$OUTPUT"
+  echo "$OUTPUT"
 
-# ── Update state ─────────────────────────────────────────────────
-TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
-cat > "$TMPFILE" <<EOJSON
-{"version":2,"last_nudge":$NOW,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$TODAY","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":0,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$TIP_BODY_AREA"}
-EOJSON
-mv "$TMPFILE" "$STATE_FILE"
+  # If nudge had late_night context, mark late hour so companion doesn't repeat
+  NUDGE_LATE_HOUR="$LAST_LATE_HOUR"
+  if [ "$NUDGE_REASON" = "late_night" ] || [ "$NUDGE_REASON" = "deep_night" ]; then
+    NUDGE_LATE_HOUR="$HOUR_NUM"
+  fi
 
+  # Save state: nudge fired
+  write_state "$SESSION_GREETED" "$LAST_COMPANION_TS" "$LAST_MILESTONE_MIN" \
+    "$NUDGE_LATE_HOUR" "$LAST_SUCCESS_TS" "$LAST_MOOD_SUPPORT_TS" \
+    "$STREAK_SHOWN" "$NOW" "$TODAY" "0" "$TIP_BODY_AREA"
+  exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────────
+# PATH B: Companion touch fires (no health nudge due)
+# ─────────────────────────────────────────────────────────────────
+if [ -n "$COMPANION_TYPE" ]; then
+
+  # Update dedup timestamps based on type
+  NEW_GREETED="$SESSION_GREETED"
+  NEW_COMPANION_TS="$NOW"
+  NEW_MILESTONE="$LAST_MILESTONE_MIN"
+  NEW_LATE_HOUR="$LAST_LATE_HOUR"
+  NEW_SUCCESS_TS="$LAST_SUCCESS_TS"
+  NEW_MOOD_TS="$LAST_MOOD_SUPPORT_TS"
+  NEW_STREAK_SHOWN="$STREAK_SHOWN"
+
+  case "$COMPANION_TYPE" in
+    session_start)
+      NEW_GREETED="true"
+      ;;
+    break_return)
+      # no special dedup needed
+      ;;
+    success)
+      NEW_SUCCESS_TS="$NOW"
+      ;;
+    frustration_support)
+      NEW_MOOD_TS="$NOW"
+      ;;
+    late_night|deep_night)
+      NEW_LATE_HOUR="$HOUR_NUM"
+      ;;
+    milestone)
+      NEW_MILESTONE="$SESSION_MINUTES"
+      ;;
+    streak)
+      NEW_STREAK_SHOWN="$CONSECUTIVE_DAYS"
+      ;;
+  esac
+
+  # Build companion output — type-specific rendering instructions
+  case "$COMPANION_TYPE" in
+
+    session_start)
+      # Determine sub-context for the greeting
+      GREETING_HINTS="hour: $HOUR_NUM"
+      if [ "$DOW" -ge 6 ]; then
+        GREETING_HINTS="$GREETING_HINTS
+weekend: true"
+      fi
+      if [ "$CONSECUTIVE_DAYS" -ge 3 ]; then
+        GREETING_HINTS="$GREETING_HINTS
+streak_days: $CONSECUTIVE_DAYS"
+      fi
+      if [ "$CONSECUTIVE_DAYS" -eq 1 ] && [ "$PROMPT_COUNT" -le 1 ]; then
+        GREETING_HINTS="$GREETING_HINTS
+fresh_start: true"
+      fi
+      if [ "$RETURNING_AFTER_BREAK" = "true" ]; then
+        GREETING_HINTS="$GREETING_HINTS
+returning: true
+away_min: $BREAK_GAP_MIN"
+      fi
+      if [ "$BURNOUT_WARNING" = "true" ]; then
+        GREETING_HINTS="$GREETING_HINTS
+burnout_warning: true"
+      fi
+
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a brief greeting (1 line max, casual, like a friend), then a blank line, then address the user's coding question. Tone by time of day: morning=upbeat, afternoon=coach, evening=gentle, late night=concerned. If streak_days shown, mention it. If weekend, acknowledge it. If burnout_warning, be gentle about rest.
+type: session_start
+$GREETING_HINTS
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    break_return)
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a brief break celebration (1 line, genuine, warm), then a blank line, then address the user's coding question. Mention the duration. If they were frustrated before the break, acknowledge the reset. Never be preachy.
+type: break_return
+break_duration_min: $BREAK_GAP_MIN
+mood_before_break: $PREV_MOOD
+today_breaks: $TODAY_BREAKS
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    success)
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a brief celebration (1 line, genuine, not over-the-top), then a blank line, then address the user's coding question. Match the energy. "Shipped." or "Bug squashed." or "Clean." Keep it tight.
+type: success
+session_duration_min: $SESSION_MINUTES
+mood: $MOOD
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    frustration_support)
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with empathy (1-2 lines, never preachy, never "just take a break"). Acknowledge the struggle. If the streak is 5+, suggest stepping away. Then a blank line, then address the user's coding question with extra care and clarity.
+type: frustration_support
+frustrated_prompts_in_row: $FRUSTRATED_STREAK
+session_duration_min: $SESSION_MINUTES
+body_battery: $BODY_BATTERY
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    late_night)
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a gentle time check (1 line, not preachy, just awareness). Then blank line, then address the user's coding question.
+type: late_night
+hour: $HOUR_NUM
+session_duration_min: $SESSION_MINUTES
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    deep_night)
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a brief honest check (1 line, direct but caring). "It's 2am. What's the minimum viable stopping point?" or "Past midnight. Tomorrow-you will review this." Then blank line, then address the user's coding question.
+type: deep_night
+hour: $HOUR_NUM
+session_duration_min: $SESSION_MINUTES
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    milestone)
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a milestone check-in (1 line). Mention session time and breaks taken. If 0 breaks, note it with light humor. Then blank line, then address the user's coding question.
+type: milestone
+session_duration_min: $SESSION_MINUTES
+today_breaks: $TODAY_BREAKS
+body_battery: $BODY_BATTERY
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+
+    streak)
+      STREAK_MSG=""
+      if [ "$CONSECUTIVE_DAYS" -ge 7 ]; then
+        STREAK_MSG="At 7+ days, gently mention rest days."
+      fi
+      cat <<EOCOMP
+[WAVE_COMPANION]
+RENDERING: START your response with a streak acknowledgment (1 line). $STREAK_MSG Then blank line, then address the user's coding question.
+type: streak
+consecutive_days: $CONSECUTIVE_DAYS
+[/WAVE_COMPANION]
+EOCOMP
+      ;;
+  esac
+
+  # Save state: companion fired
+  SG_VAL="false"
+  if [ "$NEW_GREETED" = "true" ]; then SG_VAL="true"; fi
+  write_state "$SG_VAL" "$NEW_COMPANION_TS" "$NEW_MILESTONE" \
+    "$NEW_LATE_HOUR" "$NEW_SUCCESS_TS" "$NEW_MOOD_TS" \
+    "$NEW_STREAK_SHOWN" "$LAST_NUDGE" "${LAST_NUDGE_DATE:-$TODAY}" \
+    "$PROMPT_COUNT" "$LAST_BODY_AREA"
+  exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────────
+# PATH C: Silent — no nudge, no companion
+# ─────────────────────────────────────────────────────────────────
+write_state "$SESSION_GREETED" "$LAST_COMPANION_TS" "$LAST_MILESTONE_MIN" \
+  "$LAST_LATE_HOUR" "$LAST_SUCCESS_TS" "$LAST_MOOD_SUPPORT_TS" \
+  "$STREAK_SHOWN" "$LAST_NUDGE" "${LAST_NUDGE_DATE:-$TODAY}" \
+  "$PROMPT_COUNT" "$LAST_BODY_AREA"
 exit 0

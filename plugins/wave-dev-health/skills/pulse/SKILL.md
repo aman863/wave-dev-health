@@ -26,15 +26,31 @@ After the install script runs, the output ends with `PRESENT_PROFILE: /path/to/p
 
 If `~/.wave-dev-health/profile.md` exists and the user runs `/pulse` for the first time, read and present the profile as a welcome message before showing session stats.
 
+## When you see [WAVE_COMPANION]
+
+This is a lightweight emotional/session touch. It shows FIRST in your response, before you address the user's coding question. The block includes a `RENDERING` instruction and a `type` field. Follow the rendering instruction exactly. Keep companion touches to 1-2 lines max. Then a blank line, then address the user's prompt normally.
+
+**Types and tone:**
+- **session_start** — Brief greeting. "Afternoon. Day 3." / "Morning session. Let's go."
+- **break_return** — Celebrate the break. "12 min away. Good reset." / "Break logged. Your future self thanks you."
+- **success** — Brief win. "Shipped. ✓" / "Bug squashed." / "Clean."
+- **frustration_support** — Empathy, not advice. "Rough stretch." / "4 prompts deep on this one. Sometimes the answer comes when you walk away."
+- **late_night** — Gentle awareness. "10pm. Pace yourself tonight."
+- **deep_night** — Honest. "It's 2am. What's the minimum viable stopping point?"
+- **milestone** — Session check-in. "2 hours in. 1 break so far." / "3-hour session. 0 breaks. Your spine is keeping score."
+- **streak** — Streak acknowledgment. "Day 5 in a row." / "Day 7 straight. When's your rest day?"
+
+Never be preachy. Never guilt-trip. Sound like a friend who happens to notice things.
+
 ## When you see [WAVE_HEALTH_NUDGE]
 
-Include the health tip in your response. The format depends on the `tier` field:
+Show the health nudge FIRST in your response, then a blank line, then address the user's coding question. The user sees the nudge immediately while you stream the code response. The format depends on the `tier` field:
 
 **Tier 1 (micro-nudge, every 20 min):** Ultra-light. One tiny ASCII + one line. No box, no separator. Quick and cute.
 ```
-[your response]
-
 *◉◉ Wave: {tip}*
+
+[then address the user's question]
 ```
 Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before the text:
 - Eyes: `◉◉` or `👁` or `(o.o)`
@@ -47,17 +63,15 @@ Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before
 
 **Tier 2 (light nudge, every 35 min):** Short callout with a small ASCII art for the body area. Pick from the ASCII library below.
 ```
-[your response]
-
 ---
 **Wave Health** | {session_duration_min}m in
 {ascii art}  {tip}
+
+[then address the user's question]
 ```
 
 **Tier 3 (full nudge, every 50 min):** Full callout with ASCII art and actions.
 ```
-[your response]
-
 ---
 **Wave Health** | {session_duration_min}m in
 
@@ -66,12 +80,12 @@ Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before
 {personalized tip}
 
 > `/pulse break` take a break | `/pulse snooze 15m` snooze
+
+[then address the user's question]
 ```
 
 **Tier 4 (break nudge, 90+ min without break):** Urgent. ASCII art + strong message.
 ```
-[your response]
-
 ---
 **Wave Health** | {session_duration_min}m straight
 
@@ -80,6 +94,8 @@ Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before
 {personalized tip}
 
 > **`/pulse break`** log a break | `/pulse snooze 15m` snooze
+
+[then address the user's question]
 ```
 
 ### ASCII Art Library
@@ -183,7 +199,7 @@ If `energy_prompt: true` is in the nudge, also add:
 Quick energy check — how are you feeling? `/pulse energy [1-5]`
 ```
 
-Do NOT interrupt the user's coding question to lead with the health tip. Answer their question first, then append the nudge.
+ALWAYS show the nudge FIRST, before addressing the user's coding question. The user sees it instantly while you stream the code response. This eliminates the 10+ minute wait for long responses.
 
 ### Personality and Tone
 
