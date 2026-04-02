@@ -25,11 +25,14 @@ chmod +x "$INSTALL_DIR/plugins/wave-dev-health/scripts/"*.sh 2>/dev/null || true
 
 # ── Register background nudge hook in settings.json ──────────────
 # UserPromptSubmit hook runs wellness-check.sh on every prompt
+RESPONSE_SCRIPT="$INSTALL_DIR/plugins/wave-dev-health/scripts/record-response.sh"
+
 python3 -c "
 import json, os
 
 f = '$SETTINGS_FILE'
-script = '$SCRIPT_PATH'
+prompt_script = '$SCRIPT_PATH'
+response_script = '$RESPONSE_SCRIPT'
 
 try:
     settings = json.load(open(f))
@@ -39,28 +42,29 @@ except:
 if 'hooks' not in settings:
     settings['hooks'] = {}
 
-# Check if our hook already exists
-existing = settings['hooks'].get('UserPromptSubmit', [])
-already_installed = any(
-    'wellness-check.sh' in str(h)
-    for h in existing
-)
+changed = False
 
-if not already_installed:
-    existing.append({
-        'matcher': '',
-        'hooks': [{
-            'type': 'command',
-            'command': f'bash \"{script}\"',
-            'timeout': 5
-        }]
-    })
-    settings['hooks']['UserPromptSubmit'] = existing
+# UserPromptSubmit hook: wellness check on every prompt
+ups = settings['hooks'].get('UserPromptSubmit', [])
+if not any('wellness-check.sh' in str(h) for h in ups):
+    ups.append({'matcher': '', 'hooks': [{'type': 'command', 'command': f'bash \"{prompt_script}\"', 'timeout': 5}]})
+    settings['hooks']['UserPromptSubmit'] = ups
+    changed = True
+    print('  ✓ Registered prompt hook (health nudges)')
+
+# Stop hook: record when Claude finishes responding
+stop = settings['hooks'].get('Stop', [])
+if not any('record-response.sh' in str(h) for h in stop):
+    stop.append({'matcher': '', 'hooks': [{'type': 'command', 'command': f'bash \"{response_script}\"', 'timeout': 3}]})
+    settings['hooks']['Stop'] = stop
+    changed = True
+    print('  ✓ Registered response hook (accurate break detection)')
+
+if changed:
     json.dump(settings, open(f, 'w'), indent=2)
-    print('  ✓ Registered background health nudge hook')
 else:
-    print('  ✓ Background hook already registered')
-" 2>/dev/null || echo "  ⚠ Could not register hook (update ~/.claude/settings.json manually)"
+    print('  ✓ Hooks already registered')
+" 2>/dev/null || echo "  ⚠ Could not register hooks (update ~/.claude/settings.json manually)"
 
 # ── Create state directory ───────────────────────────────────────
 mkdir -p "$STATE_DIR/sessions"

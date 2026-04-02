@@ -197,23 +197,41 @@ ELAPSED_SINCE_NUDGE=$((NOW - LAST_NUDGE))
 # ELAPSED_SINCE_BREAK is computed AFTER auto-break detection below
 SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
 
-# Prompt gap (time since last prompt)
-PROMPT_GAP=0
-if [ "$LAST_PROMPT_TS" -gt 0 ]; then
-  PROMPT_GAP=$((NOW - LAST_PROMPT_TS))
+# ── Compute ACTUAL idle time ──────────────────────────────────────
+# The time between user prompts includes Claude's processing time.
+# Claude might work for 15 min on a complex task. That's NOT a break.
+# Real idle time = now - when Claude FINISHED its last response.
+# The Stop hook writes claude_done_ts to state.json.
+CLAUDE_DONE_TS=0
+if [ -f "$STATE_FILE" ]; then
+  CLAUDE_DONE_TS=$(grep -o '"claude_done_ts":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
 fi
 
-# ── Auto-detect break from prompt gap ────────────────────────────
-# Same logic as analyze.py: 10+ min gap between messages = a break.
-# This replaces the old approach where breaks only counted from /pulse break.
+# Use the LATER of: claude_done_ts or last_prompt_ts
+# (claude_done_ts is more accurate, but might not exist on first run)
+IDLE_REFERENCE=$LAST_PROMPT_TS
+if [ "$CLAUDE_DONE_TS" -gt "$LAST_PROMPT_TS" ]; then
+  IDLE_REFERENCE=$CLAUDE_DONE_TS
+fi
+
+IDLE_TIME=0
+if [ "$IDLE_REFERENCE" -gt 0 ]; then
+  IDLE_TIME=$((NOW - IDLE_REFERENCE))
+fi
+
+# Backward compat: PROMPT_GAP still used for some signals
+PROMPT_GAP=$IDLE_TIME
+
+# ── Auto-detect break from ACTUAL idle time ──────────────────────
+# 10+ min of REAL idle time (after Claude finished) = a break.
+# NOT 10+ min between prompts (which might just be Claude working).
 AUTO_BREAK="false"
 BREAK_GAP_MIN=0
-if [ "$PROMPT_GAP" -ge 600 ] && [ "$PROMPT_GAP" -lt 28800 ]; then
-  # 10 min to 8 hours = break (over 8 hours = probably a new day, not a break)
+if [ "$IDLE_TIME" -ge 600 ] && [ "$IDLE_TIME" -lt 28800 ]; then
   AUTO_BREAK="true"
-  BREAK_GAP_MIN=$((PROMPT_GAP / 60))
+  BREAK_GAP_MIN=$((IDLE_TIME / 60))
   TODAY_BREAKS=$((TODAY_BREAKS + 1))
-  LAST_BREAK=$NOW  # Reset the break timer
+  LAST_BREAK=$NOW
 fi
 
 # Project switching detection
