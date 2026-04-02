@@ -600,7 +600,7 @@ general")
 RENDERING: START your response with the health nudge, THEN a blank line, THEN address the user's coding question. The user sees the nudge immediately while you stream the rest. Format by tier:
 - tier 1: one italic line. *emoji Wave: tip*
 - tier 2: --- separator, then Wave Health | Xm in + small ASCII art + tip
-- tier 3: --- separator, full block with ASCII art, body battery bar, personalized tip, and /pulse snooze option
+- tier 3: --- separator, full block with ASCII art, body battery bar, personalized tip
 - tier 4: --- separator, urgent block with big ASCII art, body battery, strong message
 PERSONALIZE the tip using the activity and body_most_stressed fields. Rewrite generic tips to reference what the user is actually doing. Use developer humor when sass_level is high. If auto_break_detected is true, celebrate the break instead of nudging.
 
@@ -684,8 +684,6 @@ streak_days: $CONSECUTIVE_DAYS"
   fi
 
   OUTPUT="${OUTPUT}
-snooze_command: /pulse snooze 15m
-break_command: /pulse break
 [/WAVE_HEALTH_NUDGE]"
 
   echo "$OUTPUT"

@@ -79,8 +79,6 @@ Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before
 
 {personalized tip}
 
-> `/pulse break` take a break | `/pulse snooze 15m` snooze
-
 [then address the user's question]
 ```
 
@@ -92,8 +90,6 @@ Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before
 {ascii art}
 
 {personalized tip}
-
-> **`/pulse break`** log a break | `/pulse snooze 15m` snooze
 
 [then address the user's question]
 ```
