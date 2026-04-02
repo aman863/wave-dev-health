@@ -316,229 +316,96 @@ These appear only when relevant:
 
 ## Commands
 
+Only 5 commands. Everything else is automatic.
+
 ### `/pulse`
-Read session state from `~/.wave-dev-health/state.json`. Show a quick session summary:
-- Current session duration (compute from `session_start` timestamp)
-- Nudges delivered today (`today_nudges`)
-- Breaks taken today (`today_breaks`)
-- Wave Health Score (if 5+ sessions exist in history)
+Read ALL state and show a complete dashboard. This is the only "check your health" command.
 
-Run this bash to read state:
 ```bash
+STATE_DIR="$HOME/.wave-dev-health"
 echo "=== STATE ==="
-cat ~/.wave-dev-health/state.json 2>/dev/null || echo '{}'
-echo "=== STREAK ==="
-cat ~/.wave-dev-health/streak.json 2>/dev/null || echo '{}'
-echo "=== SESSIONS ==="
-ls ~/.wave-dev-health/sessions/ 2>/dev/null | wc -l | tr -d ' '
-echo "=== ENERGY ==="
-cat ~/.wave-dev-health/energy.json 2>/dev/null || echo '[]'
-echo "=== MOOD (last 20) ==="
-tail -20 ~/.wave-dev-health/mood_log.jsonl 2>/dev/null || echo '[]'
-```
-
-### `/pulse stats`
-Same as `/pulse` but with more detail. Include:
-- Session start time (formatted)
-- Total sessions this week
-- Break compliance rate (breaks / nudges)
-- If energy is logged today, show it
-
-### `/pulse break`
-The user is taking a break. Log it and show a health tip.
-
-```bash
-STATE_DIR="$HOME/.wave-dev-health"
-STATE_FILE="$STATE_DIR/state.json"
-NOW=$(date +%s)
-TODAY=$(date +%Y-%m-%d)
-# Read current breaks count
-BREAKS=$(grep -o '"today_breaks":[0-9]*' "$STATE_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-BREAKS=$((BREAKS + 1))
-# Update state with incremented break count using python for safety
-python3 -c "
-import json, os
-f = '$STATE_FILE'
-try:
-    d = json.load(open(f))
-except:
-    d = {}
-d['today_breaks'] = $BREAKS
-d['last_break'] = $NOW
-json.dump(d, open(f+'.tmp','w'))
-os.rename(f+'.tmp', f)
-"
-echo "BREAK_LOGGED: $BREAKS breaks today"
-```
-
-After logging, congratulate the user and give them a personalized health tip based on their session state. Be encouraging. "Nice. Break #{N} today. Here's something for your [body area]..."
-
-### `/pulse energy [1-5]`
-Log the user's energy level for today.
-
-```bash
-ENERGY_FILE="$HOME/.wave-dev-health/energy.json"
-TODAY=$(date +%Y-%m-%d)
-NOW=$(date +%s)
-LEVEL="$1"
-python3 -c "
-import json, os
-f = '$ENERGY_FILE'
-try:
-    data = json.load(open(f))
-except:
-    data = []
-# Remove existing entry for today if any
-data = [e for e in data if e.get('date') != '$TODAY']
-data.append({'date': '$TODAY', 'level': $LEVEL, 'timestamp': $NOW})
-# Keep last 90 days
-data = data[-90:]
-json.dump(data, open(f+'.tmp','w'))
-os.rename(f+'.tmp', f)
-print('ENERGY_LOGGED')
-"
-```
-
-Validate that the level is 1-5. If not, tell the user: "Energy level must be 1-5. Usage: `/pulse energy 3`"
-
-After logging, respond warmly. If you have previous energy data, note the trend: "Energy: 3/5 today. Your average this week is 3.4."
-
-### `/pulse dashboard`
-Read all session state and render an ASCII dashboard. Run:
-
-```bash
-STATE_DIR="$HOME/.wave-dev-health"
 cat "$STATE_DIR/state.json" 2>/dev/null || echo '{}'
-echo "---SESSIONS---"
-for f in "$STATE_DIR/sessions"/*.json; do [ -f "$f" ] && cat "$f"; echo; done 2>/dev/null
-echo "---ENERGY---"
-cat "$STATE_DIR/energy.json" 2>/dev/null || echo '[]'
-echo "---CONFIG---"
-cat "$STATE_DIR/config.json" 2>/dev/null || echo '{}'
-echo "---SESSION_COUNT---"
+echo "=== STREAK ==="
+cat "$STATE_DIR/streak.json" 2>/dev/null || echo '{}'
+echo "=== SESSIONS ==="
 ls "$STATE_DIR/sessions/" 2>/dev/null | wc -l | tr -d ' '
+echo "=== ENERGY ==="
+cat "$STATE_DIR/energy.json" 2>/dev/null || echo '[]'
+echo "=== MOOD ==="
+tail -20 "$STATE_DIR/mood_log.jsonl" 2>/dev/null || echo '[]'
+echo "=== ACTIVITY ==="
+tail -10 "$STATE_DIR/activity.log" 2>/dev/null || echo ''
+echo "=== SHOWN ==="
+cat "$STATE_DIR/shown_tips.json" 2>/dev/null || echo '{}'
 ```
 
-Render an ASCII dashboard with this layout (adapt to terminal width):
-
-```
-WAVE DEV HEALTH                          Score: 73/100
-══════════════════════════════════════════════════════════
-Today: 3h 42m │ Breaks: 3/4 (75%) │ Energy: 4/5
-
-SESSION TIMELINE
-9am  ████████ ░ ████████████
-1pm  ████████████████████ ░ ████
-                         ^ break
-
-HEALTH FOCUS          THIS WEEK
-Eyes:    ████░ 4       Sessions: 12
-Wrists:  ███░░ 3       Coding:   28h
-Back:    ██░░░ 2       Breaks:   18
-Mental:  █░░░░ 1       Compliance: 75%
-
-── powered by Wave · wave.so/health ──
-```
-
-If there's no data yet, show: "No sessions yet. Start coding and I'll track your health."
-If terminal width < 40, show a compact single-column layout.
+Show a rich dashboard with:
+- Current session: duration, current unbroken stretch, breaks today (auto-detected)
+- Body battery meter
+- Coding streak (days)
+- This week: sessions, breaks, coding hours
+- Mood breakdown from recent mood log
+- What body area has been most stressed (from activity log)
+- If energy data exists, show trend
+- A personalized one-liner based on current state (witty, not clinical)
 
 ### `/pulse report`
-Generate the weekly health report. Read all session data:
+Weekly health report. Read all session data and generate a comprehensive summary.
 
 ```bash
 STATE_DIR="$HOME/.wave-dev-health"
-echo "---SESSIONS---"
+echo "=== SESSIONS ==="
 for f in "$STATE_DIR/sessions"/*.json; do [ -f "$f" ] && cat "$f"; echo; done 2>/dev/null
-echo "---ENERGY---"
+echo "=== ENERGY ==="
 cat "$STATE_DIR/energy.json" 2>/dev/null || echo '[]'
-echo "---STATE---"
+echo "=== STATE ==="
 cat "$STATE_DIR/state.json" 2>/dev/null || echo '{}'
+echo "=== STREAK ==="
+cat "$STATE_DIR/streak.json" 2>/dev/null || echo '{}'
+echo "=== MOOD ==="
+tail -50 "$STATE_DIR/mood_log.jsonl" 2>/dev/null || echo '[]'
 ```
 
-Generate a weekly summary with:
-- Total coding time and session count
-- Break compliance (breaks taken / nudges delivered)
-- Longest unbroken streak
-- Energy trend (if opted in)
-- Wave Health Score
-- Insight of the week (one personalized observation based on the data)
-- "powered by Wave . wave.so/health" footer
-
-Adapt the report to available data. If it's the first week with <3 sessions, say: "Building your first report... need N more sessions for meaningful patterns."
-
-### `/pulse profile`
-Show the user's accumulated health profile. Read session history and energy data.
-
-V1 profile shows 4 metrics:
-- Total sessions (all-time)
-- Average session length
-- Break compliance rate (all-time)
-- Longest unbroken streak (all-time)
-
-If 15+ sessions exist, also show:
-- Sessions by day of week
-- Average energy by time of day (if energy data exists)
+Generate with: total coding time, break stats, longest unbroken stretch, mood breakdown, energy trend, week-over-week comparison (if prior data exists), one personalized insight, "powered by Wave" footer.
 
 ### `/pulse config`
-Show current configuration and allow changes.
+Show and change settings.
 
 ```bash
 cat ~/.wave-dev-health/config.json 2>/dev/null || echo '{"version":1,"nudge_interval":3000,"energy_enabled":true,"disabled":false}'
 ```
 
-Configurable settings:
-- `nudge_interval`: seconds between nudges (default: 3000 = 50 min)
-- `energy_enabled`: whether to prompt for energy (default: true)
-- `disabled`: disable all nudges (default: false)
+Settings:
+- `/pulse config interval 30m` → nudge every 30 min
+- `/pulse config energy off` → no energy prompts
+- `/pulse config disable` → pause all nudges
+- `/pulse config enable` → resume nudges
 
-User says `/pulse config interval 30m` → update nudge_interval to 1800
-User says `/pulse config energy off` → set energy_enabled to false
-User says `/pulse config disable` → set disabled to true
-User says `/pulse config enable` → set disabled to false
-
-### `/pulse snooze [duration]`
-Snooze the next nudge. Default 15 minutes. Update state.json's `last_nudge` to `now` so the timer resets.
+### `/pulse snooze`
+Push next nudge back 15 minutes. Just resets the nudge timer.
 
 ```bash
-NOW=$(date +%s)
-STATE_FILE="$HOME/.wave-dev-health/state.json"
 python3 -c "
-import json, os
-f = '$STATE_FILE'
-try:
-    d = json.load(open(f))
-except:
-    d = {}
-d['last_nudge'] = $NOW
+import json, os, time
+f = os.path.expanduser('~/.wave-dev-health/state.json')
+try: d = json.load(open(f))
+except: d = {}
+d['last_nudge'] = int(time.time())
 json.dump(d, open(f+'.tmp','w'))
 os.rename(f+'.tmp', f)
 print('SNOOZED')
 "
 ```
 
-Respond: "Snoozed. Next nudge in {duration}."
+Respond with something witty: "Snoozed. Your spine will remember this."
 
 ### `/pulse reset`
-Delete all local state. Confirm first: "This will delete all your Wave Dev Health data (sessions, energy, profile). Are you sure? Type `/pulse reset confirm` to proceed."
+Delete all data. Confirm first: "This deletes everything. Type `/pulse reset confirm` to proceed."
 
-On confirm:
 ```bash
 rm -rf ~/.wave-dev-health
 echo "RESET_COMPLETE"
 ```
-
-## Wave Health Score Calculation
-
-When displaying the score (in dashboard, report, or /pulse), compute it from session data:
-
-- **Break compliance (40%)**: `(breaks_taken / nudges_delivered) * 100`, capped at 100
-- **Session discipline (20%)**: percentage of sessions where a break was taken before the 2-hour mark
-- **Schedule consistency (15%)**: how regular the user's coding hours are. Compute standard deviation of session start hours. Lower deviation = higher score. Use the user's OWN pattern as baseline (not a fixed 9-5).
-- **Energy trend (15% if opted in)**: week-over-week average energy change. Improving = higher score. If energy not opted in, redistribute: break compliance gets 50%, session discipline gets 25%, consistency gets 25%.
-- **Rest day balance (10%)**: coding days / 7. Score is highest at 5/7, drops for 6/7 or 7/7 (no rest). Also drops below 3/7 (inconsistent).
-
-Minimum 5 sessions to show a score. Below that: "Building your score... {N} more sessions needed."
 
 ## Voice
 
