@@ -265,17 +265,17 @@ if [ -f "$GLOBAL_ACTIVE" ]; then
 fi
 
 # Use the most recent signal: global_active, claude_done_ts, or last_prompt_ts
-IDLE_REFERENCE=$LAST_PROMPT_TS
-if [ "$CLAUDE_DONE_TS" -gt "$IDLE_REFERENCE" ]; then
-  IDLE_REFERENCE=$CLAUDE_DONE_TS
-fi
-if [ "$GLOBAL_ACTIVE_TS" -gt "$IDLE_REFERENCE" ]; then
-  IDLE_REFERENCE=$GLOBAL_ACTIVE_TS
-fi
+# Guard: if all are 0 (first ever run), IDLE_REFERENCE stays 0 and IDLE_TIME stays 0.
+IDLE_REFERENCE=0
+if [ "$LAST_PROMPT_TS" -gt 0 ]; then IDLE_REFERENCE=$LAST_PROMPT_TS; fi
+if [ "$CLAUDE_DONE_TS" -gt "$IDLE_REFERENCE" ]; then IDLE_REFERENCE=$CLAUDE_DONE_TS; fi
+if [ "$GLOBAL_ACTIVE_TS" -gt "$IDLE_REFERENCE" ]; then IDLE_REFERENCE=$GLOBAL_ACTIVE_TS; fi
 
 IDLE_TIME=0
 if [ "$IDLE_REFERENCE" -gt 0 ]; then
   IDLE_TIME=$((NOW - IDLE_REFERENCE))
+  # Sanity cap: ignore idle times > 30 days (corrupt state)
+  [ "$IDLE_TIME" -gt 2592000 ] && IDLE_TIME=0
 fi
 
 # ── Detect new Claude Code session ───────────────────────────────
@@ -369,9 +369,10 @@ fi
 
 # ── Auto-detect break from ACTUAL idle time (CROSS-SESSION) ──────
 # 10+ min of REAL idle across ALL sessions = a break.
+# No upper cap: overnight breaks (8+ hours) should still count.
 AUTO_BREAK="false"
 BREAK_GAP_MIN=0
-if [ "$IDLE_TIME" -ge 600 ] && [ "$IDLE_TIME" -lt 28800 ]; then
+if [ "$IDLE_TIME" -ge 600 ]; then
   AUTO_BREAK="true"
   BREAK_GAP_MIN=$((IDLE_TIME / 60))
   TODAY_BREAKS=$((TODAY_BREAKS + 1))
@@ -413,9 +414,9 @@ else
   FRUSTRATED_STREAK=0
 fi
 
-# Returning after long gap
+# Returning after long gap (only if NOT a new session, to avoid conflicting with session_start)
 RETURNING_AFTER_BREAK="false"
-if [ "$IDLE_TIME" -ge 1800 ] && [ "$IDLE_TIME" -lt 28800 ]; then
+if [ "$IS_NEW_SESSION" = "false" ] && [ "$IDLE_TIME" -ge 1800 ]; then
   RETURNING_AFTER_BREAK="true"
 fi
 
@@ -426,7 +427,8 @@ if [ "$LAST_BREAK" -gt 0 ]; then
   CURRENT_STRETCH=$((ELAPSED_SINCE_BREAK / 60))
 fi
 
-# Burnout signal
+# Burnout signal: 7+ consecutive days, first nudge of the day
+# TODAY_NUDGES is from state.json (not yet incremented, that happens in nudge output)
 BURNOUT_WARNING="false"
 if [ "$CONSECUTIVE_DAYS" -ge 7 ] && [ "$TODAY_NUDGES" -eq 0 ]; then
   BURNOUT_WARNING="true"
@@ -602,12 +604,41 @@ elif [ "$TODAY_NUDGES" -ge 3 ] && [ "$TODAY_BREAKS" -eq 0 ]; then
   SASS_LEVEL="sarcastic"
 fi
 
+# Body battery: weighted score from multiple signals
+# Higher drain = lower battery. Score 0-100, then map to labels.
+DRAIN=0
+# Unbroken stretch (biggest factor)
+[ "$CURRENT_STRETCH" -ge 120 ] && DRAIN=$((DRAIN + 50)) || {
+  [ "$CURRENT_STRETCH" -ge 90 ] && DRAIN=$((DRAIN + 35)) || {
+    [ "$CURRENT_STRETCH" -ge 60 ] && DRAIN=$((DRAIN + 20)) || {
+      [ "$CURRENT_STRETCH" -ge 30 ] && DRAIN=$((DRAIN + 10))
+    }
+  }
+}
+# Total screen time today
+[ "$TOTAL_SCREEN_MIN" -ge 360 ] && DRAIN=$((DRAIN + 25)) || {
+  [ "$TOTAL_SCREEN_MIN" -ge 240 ] && DRAIN=$((DRAIN + 15)) || {
+    [ "$TOTAL_SCREEN_MIN" -ge 120 ] && DRAIN=$((DRAIN + 8))
+  }
+}
+# Late night penalty (energy naturally lower)
+HOUR_NUM=$((10#$HOUR))
+if [ "$HOUR_NUM" -ge 22 ] || [ "$HOUR_NUM" -lt 6 ]; then
+  DRAIN=$((DRAIN + 15))
+elif [ "$HOUR_NUM" -ge 14 ] && [ "$HOUR_NUM" -lt 16 ]; then
+  DRAIN=$((DRAIN + 5))  # post-lunch dip
+fi
+# Frustration drains faster
+[ "$FRUSTRATED_STREAK" -ge 3 ] && DRAIN=$((DRAIN + 10))
+# No breaks today penalty
+[ "$TODAY_BREAKS" -eq 0 ] && [ "$TODAY_NUDGES" -ge 2 ] && DRAIN=$((DRAIN + 10))
+
 BODY_BATTERY="good"
-if [ "$CURRENT_STRETCH" -ge 120 ]; then
+if [ "$DRAIN" -ge 60 ]; then
   BODY_BATTERY="critical"
-elif [ "$CURRENT_STRETCH" -ge 90 ]; then
+elif [ "$DRAIN" -ge 40 ]; then
   BODY_BATTERY="low"
-elif [ "$CURRENT_STRETCH" -ge 60 ]; then
+elif [ "$DRAIN" -ge 20 ]; then
   BODY_BATTERY="medium"
 fi
 
