@@ -30,12 +30,20 @@ If `~/.wave-dev-health/profile.md` exists and the user runs `/pulse` for the fir
 
 Include the health tip in your response. The format depends on the `tier` field:
 
-**Tier 1 (micro-nudge, every 20 min):** Ultra-light. One line at the end of your response. No box, no separator. Just a gentle inline note.
+**Tier 1 (micro-nudge, every 20 min):** Ultra-light. One tiny ASCII + one line. No box, no separator. Quick and cute.
 ```
 [your response]
 
-*Wave: {tip}*
+*◉◉ Wave: {tip}*
 ```
+Pick a tiny inline art that fits the body area. Keep it to 1-3 characters before the text:
+- Eyes: `◉◉` or `👁` or `(o.o)`
+- Wrists: `✋` or `🤚`
+- Hydration: `💧` or `🥤`
+- Posture: `🧘` or `↑`
+- Breathing: `🫁` or `~`
+- Shoulders: `↻`
+- Movement: `🚶`
 
 **Tier 2 (light nudge, every 35 min):** Short callout with a small ASCII art for the body area. Pick from the ASCII library below.
 ```
@@ -163,7 +171,7 @@ shoulders     drop them
 ```
 
 **Rules for ASCII art:**
-- Tier 1: NO ascii art. Just the italic text line.
+- Tier 1: Tiny inline art (1-3 chars) before the italic text. Quick, cute, not disruptive.
 - Tier 2: Small inline art (1 line), placed before the tip.
 - Tier 3: 2-3 line art block above the tip.
 - Tier 4: Bigger art block. Make it unavoidable.
