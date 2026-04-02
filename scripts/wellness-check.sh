@@ -205,16 +205,9 @@ LAST_MILESTONE_MIN=${LAST_MILESTONE_MIN:-0}; LAST_LATE_HOUR=${LAST_LATE_HOUR:--1
 LAST_SUCCESS_TS=${LAST_SUCCESS_TS:-0}; LAST_MOOD_SUPPORT_TS=${LAST_MOOD_SUPPORT_TS:-0}
 STREAK_SHOWN=${STREAK_SHOWN:-0}; CONSECUTIVE_DAYS=${CONSECUTIVE_DAYS:-1}
 
-if [ "$SESSION_START" -eq 0 ]; then SESSION_START=$NOW; fi
-PROMPT_COUNT=$((PROMPT_COUNT + 1))
-
-# ── Derived signals ──────────────────────────────────────────────
-ELAPSED_SINCE_NUDGE=$((NOW - LAST_NUDGE))
-SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
-
 # ── Compute ACTUAL idle time (excludes Claude processing) ────────
+# Must run BEFORE session detection since session reset depends on idle time.
 # Real idle = now - when Claude FINISHED its last response.
-# The Stop hook writes claude_done_ts to state.json.
 IDLE_REFERENCE=$LAST_PROMPT_TS
 if [ "$CLAUDE_DONE_TS" -gt "$LAST_PROMPT_TS" ]; then
   IDLE_REFERENCE=$CLAUDE_DONE_TS
@@ -224,6 +217,34 @@ IDLE_TIME=0
 if [ "$IDLE_REFERENCE" -gt 0 ]; then
   IDLE_TIME=$((NOW - IDLE_REFERENCE))
 fi
+
+# ── Detect new Claude Code session ───────────────────────────────
+# If idle > 30 min, treat as new session. Resets session_start, prompt_count,
+# milestone tracking, and greeting so metrics don't pile up across sessions.
+if [ "$SESSION_START" -eq 0 ]; then
+  SESSION_START=$NOW
+elif [ "$IDLE_TIME" -ge 1800 ]; then
+  # 30+ min real idle = new session
+  SESSION_START=$NOW
+  PROMPT_COUNT=0
+  SESSION_GREETED="false"
+  LAST_MILESTONE_MIN=0
+  FRUSTRATED_STREAK=0
+  LAST_LATE_HOUR=-1
+elif [ "$IDLE_REFERENCE" -eq 0 ] && [ "$LAST_PROMPT_TS" -gt 0 ] && [ "$((NOW - LAST_PROMPT_TS))" -ge 1800 ]; then
+  # Fallback when claude_done_ts missing: use prompt gap
+  SESSION_START=$NOW
+  PROMPT_COUNT=0
+  SESSION_GREETED="false"
+  LAST_MILESTONE_MIN=0
+  FRUSTRATED_STREAK=0
+  LAST_LATE_HOUR=-1
+fi
+PROMPT_COUNT=$((PROMPT_COUNT + 1))
+
+# ── Derived signals ──────────────────────────────────────────────
+ELAPSED_SINCE_NUDGE=$((NOW - LAST_NUDGE))
+SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
 
 # ── Auto-detect break from ACTUAL idle time ──────────────────────
 # 10+ min of REAL idle (after Claude finished) = a break.
