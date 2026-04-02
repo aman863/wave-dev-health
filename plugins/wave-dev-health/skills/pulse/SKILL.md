@@ -37,32 +37,138 @@ Include the health tip in your response. The format depends on the `tier` field:
 *Wave: {tip}*
 ```
 
-**Tier 2 (light nudge, every 35 min):** Short callout. Two lines max.
+**Tier 2 (light nudge, every 35 min):** Short callout with a small ASCII art for the body area. Pick from the ASCII library below.
 ```
 [your response]
 
 ---
-**Wave Health** | {session_duration_min}m in — {tip}
+**Wave Health** | {session_duration_min}m in
+{ascii art}  {tip}
 ```
 
-**Tier 3 (full nudge, every 50 min):** Full callout with actions.
+**Tier 3 (full nudge, every 50 min):** Full callout with ASCII art and actions.
 ```
 [your response]
 
 ---
-**Wave Health** | {session_duration_min}m in — {tip}
-> Take a break: `/pulse break` | Snooze: `/pulse snooze 15m`
+**Wave Health** | {session_duration_min}m in
+
+{ascii art}
+
+{personalized tip}
+
+> `/pulse break` take a break | `/pulse snooze 15m` snooze
 ```
 
-**Tier 4 (break nudge, 90+ min without break):** Urgent. Make it clear this matters.
+**Tier 4 (break nudge, 90+ min without break):** Urgent. ASCII art + strong message.
 ```
 [your response]
 
 ---
-**Wave Health** | {session_duration_min}m straight — time for a real break.
-{tip}
-> **Log a break:** `/pulse break` | Snooze: `/pulse snooze 15m`
+**Wave Health** | {session_duration_min}m straight
+
+{ascii art}
+
+{personalized tip}
+
+> **`/pulse break`** log a break | `/pulse snooze 15m` snooze
 ```
+
+### ASCII Art Library
+
+Pick one that matches `body_most_stressed` or `tip_category`. Vary them, don't use the same one twice in a row. These are small and meant to catch the eye without being obnoxious.
+
+**Eyes (use for eye breaks, 20-20-20):**
+```
+◉ ◉  → Look away
+ ‿
+```
+```
+👁  ➜  🌳   20 ft away, 20 sec
+```
+```
+(o.o)  →  (- -)  →  (o.o)
+ blink    blink     better
+```
+
+**Wrists (use for stretches, typing breaks):**
+```
+  🤚 ← stretch →  🤚
+  ╰──── 15 sec ────╯
+```
+```
+ ✋ ~~ flex ~~ ✋
+```
+
+**Hydration:**
+```
+ 🥤 glug glug
+ ┃█████████┃
+ ┗━━━━━━━━━┛
+```
+```
+  ~~~ 💧 ~~~
+  hydrate or
+  diedrate
+```
+
+**Back / Posture:**
+```
+  /|    →    |
+ / |    →    |   sit up
+/__|    →   _|_
+```
+```
+  🧘 uncoil your spine
+```
+
+**Shoulders / Neck:**
+```
+ ╭─╮         ╭─╮
+╭╯ ╰╮  →  ╭─╯ ╰─╮
+shoulders     drop them
+```
+```
+  ↻ roll ↻ roll ↻
+   shoulders x5
+```
+
+**Mental / Breathing:**
+```
+ breathe in  ····→  4 sec
+ hold        ····→  4 sec
+ breathe out ····→  6 sec
+```
+```
+  🫁 in...2...3...4...out...2...3...4...5...6
+```
+
+**Movement / Stand up:**
+```
+  🪑 → 🧍 → 🚶
+  sit   stand  walk
+```
+```
+ ┌─┐    ╭─╮    ╭─╮
+ │ │ →  │ │ →  │ │ →  🚶
+ └─┘    ╰─╯    walk 60 sec
+```
+
+**Full break (Tier 4, urgent):**
+```
+  ⚠️  YOUR BODY IS ASKING YOU TO MOVE  ⚠️
+  ┌──────────────────────────────────────┐
+  │   🪑 → 🧍→ 🚶  60 seconds. Go.    │
+  └──────────────────────────────────────┘
+```
+
+**Rules for ASCII art:**
+- Tier 1: NO ascii art. Just the italic text line.
+- Tier 2: Small inline art (1 line), placed before the tip.
+- Tier 3: 2-3 line art block above the tip.
+- Tier 4: Bigger art block. Make it unavoidable.
+- Never repeat the exact same ASCII art back to back. Rotate through the options for each body area.
+- If the art doesn't render well in the context (e.g., the emoji might not display), fall back to simpler ASCII characters.
 
 If `energy_prompt: true` is in the nudge, also add:
 ```
