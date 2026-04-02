@@ -192,7 +192,8 @@ LAST_PROJECT=""; LAST_PROMPT_TS=0; FRUSTRATED_STREAK=0
 LAST_BODY_AREA=""; CLAUDE_DONE_TS=0
 SESSION_GREETED="false"; LAST_COMPANION_TS=0; LAST_MILESTONE_MIN=0
 LAST_LATE_HOUR=-1; LAST_SUCCESS_TS=0; LAST_MOOD_SUPPORT_TS=0
-STREAK_SHOWN=0; PREV_MOOD=""
+STREAK_SHOWN=0; PREV_MOOD=""; LAST_SESSION_PID=0
+LAST_SESSION_DURATION=0; LAST_SESSION_PROJECT=""
 
 if [ -f "$STATE_FILE" ]; then
   eval "$(python3 -c "
@@ -231,6 +232,9 @@ p('LAST_SUCCESS_TS', d.get('last_success_ts', 0))
 p('LAST_MOOD_SUPPORT_TS', d.get('last_mood_support_ts', 0))
 p('STREAK_SHOWN', d.get('streak_shown', 0))
 p('PREV_MOOD', d.get('prev_mood', ''))
+p('LAST_SESSION_PID', d.get('last_session_pid', 0))
+p('LAST_SESSION_DURATION', d.get('last_session_duration', 0))
+p('LAST_SESSION_PROJECT', d.get('last_session_project', ''))
 
 # Daily counters: only carry forward if same day
 nd = d.get('last_nudge_date', '')
@@ -249,6 +253,7 @@ CLAUDE_DONE_TS=${CLAUDE_DONE_TS:-0}; LAST_COMPANION_TS=${LAST_COMPANION_TS:-0}
 LAST_MILESTONE_MIN=${LAST_MILESTONE_MIN:-0}; LAST_LATE_HOUR=${LAST_LATE_HOUR:--1}
 LAST_SUCCESS_TS=${LAST_SUCCESS_TS:-0}; LAST_MOOD_SUPPORT_TS=${LAST_MOOD_SUPPORT_TS:-0}
 STREAK_SHOWN=${STREAK_SHOWN:-0}; CONSECUTIVE_DAYS=${CONSECUTIVE_DAYS:-1}
+LAST_SESSION_PID=${LAST_SESSION_PID:-0}; LAST_SESSION_DURATION=${LAST_SESSION_DURATION:-0}
 
 # ── Compute ACTUAL idle time (CROSS-SESSION) ─────────────────────
 # Uses global_active file mtime: the last prompt in ANY session.
@@ -274,20 +279,37 @@ if [ "$IDLE_REFERENCE" -gt 0 ]; then
 fi
 
 # ── Detect new Claude Code session ───────────────────────────────
-# If idle > 30 min, treat as new session. Resets session_start, prompt_count,
-# milestone tracking, and greeting so metrics don't pile up across sessions.
+# Primary: PPID change = new Claude Code instance = new session.
+# Fallback: 30+ min idle within same instance = session reset.
+CURRENT_PPID=${PPID:-0}
+IS_NEW_SESSION="false"
+BREAK_SINCE_LAST_MIN=0
+
 if [ "$SESSION_START" -eq 0 ]; then
+  # First ever run
+  IS_NEW_SESSION="true"
   SESSION_START=$NOW
-elif [ "$IDLE_TIME" -ge 1800 ]; then
-  # 30+ min real idle = new session
+elif [ "$LAST_SESSION_PID" -ne 0 ] && [ "$LAST_SESSION_PID" -ne "$CURRENT_PPID" ]; then
+  # Different Claude Code process = new session
+  IS_NEW_SESSION="true"
+  # Save previous session stats before resetting
+  LAST_SESSION_DURATION=$(( (NOW - SESSION_START) / 60 ))
+  LAST_SESSION_PROJECT="$PROJECT_BASE"
+  if [ "$IDLE_REFERENCE" -gt 0 ]; then
+    BREAK_SINCE_LAST_MIN=$(( (NOW - IDLE_REFERENCE) / 60 ))
+  fi
   SESSION_START=$NOW
   PROMPT_COUNT=0
   SESSION_GREETED="false"
   LAST_MILESTONE_MIN=0
   FRUSTRATED_STREAK=0
   LAST_LATE_HOUR=-1
-elif [ "$IDLE_REFERENCE" -eq 0 ] && [ "$LAST_PROMPT_TS" -gt 0 ] && [ "$((NOW - LAST_PROMPT_TS))" -ge 1800 ]; then
-  # Fallback when claude_done_ts missing: use prompt gap
+elif [ "$IDLE_TIME" -ge 1800 ]; then
+  # 30+ min idle within same Claude instance = session reset
+  IS_NEW_SESSION="true"
+  LAST_SESSION_DURATION=$(( (NOW - SESSION_START) / 60 ))
+  LAST_SESSION_PROJECT="$PROJECT_BASE"
+  BREAK_SINCE_LAST_MIN=$((IDLE_TIME / 60))
   SESSION_START=$NOW
   PROMPT_COUNT=0
   SESSION_GREETED="false"
@@ -605,7 +627,7 @@ write_state() {
 
   TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
   cat > "$TMPFILE" <<EOJSON
-{"version":3,"last_nudge":$LN,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LND","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PC,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LBA","session_greeted":$SG,"last_companion_ts":$LCT,"last_milestone_min":$LMM,"last_late_hour":$LLH,"last_success_ts":$LST,"last_mood_support_ts":$LMST,"streak_shown":$SS,"prev_mood":"$MOOD"}
+{"version":4,"last_nudge":$LN,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LND","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PC,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LBA","session_greeted":$SG,"last_companion_ts":$LCT,"last_milestone_min":$LMM,"last_late_hour":$LLH,"last_success_ts":$LST,"last_mood_support_ts":$LMST,"streak_shown":$SS,"prev_mood":"$MOOD","last_session_pid":$CURRENT_PPID,"last_session_duration":$LAST_SESSION_DURATION,"last_session_project":"$LAST_SESSION_PROJECT"}
 EOJSON
   mv "$TMPFILE" "$STATE_FILE"
 }
@@ -861,10 +883,27 @@ returning: true
 away_min: $BREAK_GAP_MIN"
       [ "$BURNOUT_WARNING" = "true" ] && EXTRA="${EXTRA}
 burnout_warning: true"
+      # Last session context
+      if [ "$LAST_SESSION_DURATION" -gt 0 ]; then
+        EXTRA="${EXTRA}
+last_session_duration_min: $LAST_SESSION_DURATION"
+      fi
+      if [ -n "$LAST_SESSION_PROJECT" ] && [ "$LAST_SESSION_PROJECT" != "unknown" ]; then
+        EXTRA="${EXTRA}
+last_session_project: $LAST_SESSION_PROJECT"
+      fi
+      if [ -n "$PREV_MOOD" ] && [ "$PREV_MOOD" != "neutral" ]; then
+        EXTRA="${EXTRA}
+last_session_mood: $PREV_MOOD"
+      fi
+      if [ "$BREAK_SINCE_LAST_MIN" -gt 0 ]; then
+        EXTRA="${EXTRA}
+break_since_last_min: $BREAK_SINCE_LAST_MIN"
+      fi
 
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave, a developer health companion. START with a brief greeting (1-2 lines, casual, like a friend who knows what they've been up to). Read the user's prompt to understand what they're about to work on. Greet accordingly. Then blank line, then address their question.
+RENDERING: You are Wave, a developer health companion. This is a NEW session. START with a welcome (1-2 lines, casual, like a friend who remembers what happened last time). If you have last session context, reference it: what they were working on, how it went, how long they've been away. Read the user's first prompt to understand what they're about to work on. Then blank line, then address their question.
 type: session_start
 hour: $HOUR_NUM
 consecutive_coding_days: $CONSECUTIVE_DAYS$EXTRA$COMPANION_CONTEXT
