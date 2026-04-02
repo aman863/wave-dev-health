@@ -82,6 +82,79 @@ if [ "$PROMPT_LEN" -lt 20 ] && [ "$PROMPT_LEN" -gt 0 ]; then
   FRUSTRATION_SCORE=$((FRUSTRATION_SCORE + 1))
 fi
 
+# ── Activity detection (what is the user actually doing?) ────────
+# This gets passed to Claude so it can personalize the tip to
+# the specific work, not just "take a break."
+ACTIVITY="general"
+BODY_FOCUS="general"  # which body part is most stressed right now
+
+# Testing = intense reading of output, eyes strain
+if echo "$PROMPT_LOWER" | grep -qE '(test|spec|assert|expect|coverage|mock|fixture|jest|vitest|bats|pytest)'; then
+  ACTIVITY="testing"
+  BODY_FOCUS="eyes"  # reading dense test output
+fi
+
+# Code review / reading = sustained eye focus
+if echo "$PROMPT_LOWER" | grep -qE '(review|read|check|look at|what does|explain|understand|diff|pr )'; then
+  ACTIVITY="reviewing"
+  BODY_FOCUS="eyes"
+fi
+
+# Writing code = wrist strain from typing
+if echo "$PROMPT_LOWER" | grep -qE '(write|implement|create|add.*function|add.*component|refactor|rename|extract|move)'; then
+  ACTIVITY="writing"
+  BODY_FOCUS="wrists"
+fi
+
+# Debugging = tense posture + eye strain from scanning
+if [ "$IS_DEBUGGING" = "true" ] || echo "$PROMPT_LOWER" | grep -qE '(debug|fix|trace|log|inspect|stack|breakpoint|print)'; then
+  ACTIVITY="debugging"
+  BODY_FOCUS="eyes"  # scanning logs and stack traces
+fi
+
+# DevOps / config work = long periods of sitting still waiting
+if echo "$PROMPT_LOWER" | grep -qE '(deploy|docker|kubernetes|ci|cd|pipeline|build|config|env|nginx|server|aws|terraform)'; then
+  ACTIVITY="devops"
+  BODY_FOCUS="back"  # lots of waiting and sitting
+fi
+
+# Design / CSS work = hunching forward to see pixels
+if echo "$PROMPT_LOWER" | grep -qE '(css|style|design|layout|color|font|padding|margin|responsive|animation|ui|ux)'; then
+  ACTIVITY="design"
+  BODY_FOCUS="neck"  # leaning in to see visual details
+fi
+
+# Data work = reading tables and numbers
+if echo "$PROMPT_LOWER" | grep -qE '(database|query|sql|migration|schema|table|data|csv|json|api|fetch|request)'; then
+  ACTIVITY="data"
+  BODY_FOCUS="eyes"
+fi
+
+# ── Track rolling activity window (last 5 activities) ────────────
+ACTIVITY_LOG="$STATE_DIR/activity.log"
+if [ "$PROMPT_LEN" -gt 0 ]; then
+  echo "$NOW $ACTIVITY $BODY_FOCUS" >> "$ACTIVITY_LOG" 2>/dev/null || true
+  # Keep only last 20 entries
+  if [ -f "$ACTIVITY_LOG" ]; then
+    ALINES=$(wc -l < "$ACTIVITY_LOG" 2>/dev/null | tr -d ' ')
+    if [ "$ALINES" -gt 20 ]; then
+      tail -20 "$ACTIVITY_LOG" > "$ACTIVITY_LOG.tmp" && mv "$ACTIVITY_LOG.tmp" "$ACTIVITY_LOG"
+    fi
+  fi
+fi
+
+# Summarize recent activity pattern
+RECENT_ACTIVITIES=""
+DOMINANT_FOCUS=""
+if [ -f "$ACTIVITY_LOG" ]; then
+  RECENT_ACTIVITIES=$(tail -5 "$ACTIVITY_LOG" 2>/dev/null | awk '{print $2}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+  DOMINANT_FOCUS=$(tail -5 "$ACTIVITY_LOG" 2>/dev/null | awk '{print $3}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+fi
+# Use dominant if available, else current
+if [ -n "$DOMINANT_FOCUS" ] && [ "$DOMINANT_FOCUS" != "" ]; then
+  BODY_FOCUS="$DOMINANT_FOCUS"
+fi
+
 # ── Read config ──────────────────────────────────────────────────
 DISABLED="false"
 CUSTOM_INTERVAL=""
@@ -389,6 +462,8 @@ tier: ${NUDGE_TIER}
 session_duration_min: ${SESSION_MINUTES}
 nudge_reason: ${NUDGE_REASON}
 mood: ${MOOD}
+activity: ${ACTIVITY}
+body_most_stressed: ${BODY_FOCUS}
 tip_category: ${TIP_CATEGORY}
 tip: ${TIP_TEXT}
 today_nudges: ${TODAY_NUDGES}

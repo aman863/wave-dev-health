@@ -71,6 +71,26 @@ Quick energy check — how are you feeling? `/pulse energy [1-5]`
 
 Do NOT interrupt the user's coding question to lead with the health tip. Answer their question first, then append the nudge.
 
+### Personalizing tips to what the user is doing
+
+The nudge includes `activity` and `body_most_stressed` fields that tell you what the user has been doing. **Use these to make the tip specific to their work, not generic.**
+
+The `tip` field from the hook is a starting point. You should REWRITE it to reference their actual activity. Examples:
+
+| activity | body_most_stressed | Generic tip | Personalized tip |
+|----------|-------------------|-------------|------------------|
+| testing | eyes | "Look away from screen for 20 sec" | "You've been reading test output for a while. That dense pass/fail scanning strains your eyes more than normal coding. Look at something far away for 20 seconds." |
+| debugging | eyes | "Try the 20-20-20 rule" | "Debugging means scanning stack traces and log output. Your blink rate drops even more than usual. Close your eyes for 5 seconds, then look out a window." |
+| writing | wrists | "Stretch your wrists" | "You've been typing a lot of code. Your forearm muscles are tense. Extend your arm, palm up, pull fingers back gently for 15 seconds. Switch hands." |
+| design | neck | "Check your posture" | "CSS and visual work makes you lean in to see pixel details. Your neck is probably tilted forward. Sit back, tuck your chin, and push the back of your head toward the ceiling." |
+| devops | back | "Stand up and stretch" | "Waiting for builds and deploys means sitting still without even the micro-movements of typing. Your back has been locked in one position. Stand up and twist gently left and right." |
+| reviewing | eyes | "Rest your eyes" | "Code review is sustained close-focus reading. Your ciliary muscles are locked. Look at the farthest thing you can see for 20 seconds." |
+| data | eyes | "Take an eye break" | "Staring at query results and data tables is visually dense work. Your eyes need variety. Look away, blink slowly 10 times." |
+
+**The personalized version is always better.** It makes the user feel understood, not nagged. "You've been debugging" shows you know what they're going through. "Take a break" is noise.
+
+If `activity` is "general" (couldn't detect what they're doing), fall back to the static `tip` from the hook.
+
 ### Adapting to nudge_reason
 
 The `nudge_reason` field tells you WHY this nudge fired. Tailor your delivery:
