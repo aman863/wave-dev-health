@@ -10,6 +10,10 @@ NOW=$(date +%s)
 [ -d "$STATE_DIR" ] || exit 0
 [ -f "$STATE_FILE" ] || exit 0
 
+# Touch global_active so cross-session idle time stays accurate
+# (Claude finishing = the user can now be truly idle)
+touch "$STATE_DIR/global_active" 2>/dev/null || true
+
 # Write claude_done_ts to state using atomic write
 python3 -c "
 import json, os

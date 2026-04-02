@@ -16,6 +16,8 @@ ENERGY_FILE="$STATE_DIR/energy.json"
 CONFIG_FILE="$STATE_DIR/config.json"
 STREAK_FILE="$STATE_DIR/streak.json"
 MOOD_FILE="$STATE_DIR/mood_log.jsonl"
+GLOBAL_ACTIVE="$STATE_DIR/global_active"
+TODAY_LOG="$STATE_DIR/today_activity.log"
 
 # ── Tier intervals ───────────────────────────────────────────────
 # ── Debug mode ───────────────────────────────────────────────────
@@ -145,6 +147,32 @@ if [ -n "$DOMINANT_FOCUS" ] && [ "$DOMINANT_FOCUS" != "" ]; then
   BODY_FOCUS="$DOMINANT_FOCUS"
 fi
 
+# ── Cross-session tracking ───────────────────────────────────────
+# Touch global_active on every prompt. mtime = last activity across ALL sessions.
+# This is how we detect real breaks (no prompt in ANY session for 10+ min).
+CURRENT_PROJECT="${CLAUDE_PROJECT_DIR:-unknown}"
+PROJECT_BASE=$(basename "$CURRENT_PROJECT")
+touch "$GLOBAL_ACTIVE" 2>/dev/null || true
+
+# Append to daily activity log (tracks what user is working on across sessions)
+# Format: timestamp project activity mood session_pid
+# Rotate at start of new day
+if [ -f "$TODAY_LOG" ]; then
+  FIRST_LINE=$(head -1 "$TODAY_LOG" 2>/dev/null || echo "")
+  FIRST_DATE=$(echo "$FIRST_LINE" | awk '{print $2}' 2>/dev/null || echo "")
+  if [ -n "$FIRST_DATE" ] && [ "$FIRST_DATE" != "$TODAY" ]; then
+    : > "$TODAY_LOG"  # new day, clear log
+  fi
+fi
+echo "$NOW $TODAY $PROJECT_BASE $ACTIVITY $MOOD ${PPID:-0}" >> "$TODAY_LOG" 2>/dev/null || true
+# Keep last 500 entries max
+if [ -f "$TODAY_LOG" ]; then
+  TLINES=$(wc -l < "$TODAY_LOG" 2>/dev/null | tr -d ' ')
+  if [ "$TLINES" -gt 500 ]; then
+    tail -300 "$TODAY_LOG" > "$TODAY_LOG.tmp" && mv "$TODAY_LOG.tmp" "$TODAY_LOG"
+  fi
+fi
+
 # ── Read config ──────────────────────────────────────────────────
 DISABLED="false"
 CUSTOM_INTERVAL=""
@@ -222,12 +250,22 @@ LAST_MILESTONE_MIN=${LAST_MILESTONE_MIN:-0}; LAST_LATE_HOUR=${LAST_LATE_HOUR:--1
 LAST_SUCCESS_TS=${LAST_SUCCESS_TS:-0}; LAST_MOOD_SUPPORT_TS=${LAST_MOOD_SUPPORT_TS:-0}
 STREAK_SHOWN=${STREAK_SHOWN:-0}; CONSECUTIVE_DAYS=${CONSECUTIVE_DAYS:-1}
 
-# ── Compute ACTUAL idle time (excludes Claude processing) ────────
-# Must run BEFORE session detection since session reset depends on idle time.
-# Real idle = now - when Claude FINISHED its last response.
+# ── Compute ACTUAL idle time (CROSS-SESSION) ─────────────────────
+# Uses global_active file mtime: the last prompt in ANY session.
+# This means prompting in Session B resets the idle clock for Session A too.
+# Fallback: per-session claude_done_ts or last_prompt_ts.
+GLOBAL_ACTIVE_TS=0
+if [ -f "$GLOBAL_ACTIVE" ]; then
+  GLOBAL_ACTIVE_TS=$(python3 -c "import os; print(int(os.path.getmtime('$GLOBAL_ACTIVE')))" 2>/dev/null || echo "0")
+fi
+
+# Use the most recent signal: global_active, claude_done_ts, or last_prompt_ts
 IDLE_REFERENCE=$LAST_PROMPT_TS
-if [ "$CLAUDE_DONE_TS" -gt "$LAST_PROMPT_TS" ]; then
+if [ "$CLAUDE_DONE_TS" -gt "$IDLE_REFERENCE" ]; then
   IDLE_REFERENCE=$CLAUDE_DONE_TS
+fi
+if [ "$GLOBAL_ACTIVE_TS" -gt "$IDLE_REFERENCE" ]; then
+  IDLE_REFERENCE=$GLOBAL_ACTIVE_TS
 fi
 
 IDLE_TIME=0
@@ -263,8 +301,52 @@ PROMPT_COUNT=$((PROMPT_COUNT + 1))
 ELAPSED_SINCE_NUDGE=$((NOW - LAST_NUDGE))
 SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
 
-# ── Auto-detect break from ACTUAL idle time ──────────────────────
-# 10+ min of REAL idle (after Claude finished) = a break.
+# ── Cross-session analysis ────────────────────────────────────────
+# What is the user working on across all sessions?
+ACTIVE_PROJECTS=""
+PARALLEL_SESSIONS=1
+TOTAL_SCREEN_MIN=0
+
+if [ -f "$TODAY_LOG" ]; then
+  CUTOFF_30M=$((NOW - 1800))
+  CUTOFF_5M=$((NOW - 300))
+
+  # Active projects: distinct projects with activity in last 30 min
+  ACTIVE_PROJECTS=$(awk -v c="$CUTOFF_30M" '$1 >= c {print $3}' "$TODAY_LOG" 2>/dev/null | sort -u | tr '\n' ',' | sed 's/,$//')
+
+  # Parallel sessions: distinct PIDs with activity in last 5 min
+  PARALLEL_SESSIONS=$(awk -v c="$CUTOFF_5M" '$1 >= c {print $6}' "$TODAY_LOG" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+  [ "$PARALLEL_SESSIONS" -lt 1 ] && PARALLEL_SESSIONS=1
+
+  # Total screen time today: first prompt to now, minus gaps of 10+ min
+  TOTAL_SCREEN_MIN=$(python3 -c "
+import sys
+entries = []
+for line in open('$TODAY_LOG'):
+    parts = line.strip().split()
+    if len(parts) >= 2:
+        try: entries.append(int(parts[0]))
+        except: pass
+if not entries:
+    print(0)
+    sys.exit()
+entries.sort()
+total = 0
+prev = entries[0]
+for ts in entries[1:]:
+    gap = ts - prev
+    if gap < 600:  # < 10 min = active
+        total += gap
+    prev = ts
+# Add time from last entry to now (if recent)
+if $NOW - entries[-1] < 600:
+    total += $NOW - entries[-1]
+print(total // 60)
+" 2>/dev/null || echo "0")
+fi
+
+# ── Auto-detect break from ACTUAL idle time (CROSS-SESSION) ──────
+# 10+ min of REAL idle across ALL sessions = a break.
 AUTO_BREAK="false"
 BREAK_GAP_MIN=0
 if [ "$IDLE_TIME" -ge 600 ] && [ "$IDLE_TIME" -lt 28800 ]; then
@@ -274,8 +356,7 @@ if [ "$IDLE_TIME" -ge 600 ] && [ "$IDLE_TIME" -lt 28800 ]; then
   LAST_BREAK=$NOW
 fi
 
-# Project switching
-CURRENT_PROJECT="${CLAUDE_PROJECT_DIR:-unknown}"
+# Project switching (CURRENT_PROJECT set earlier in cross-session tracking)
 PROJECT_SWITCHED="false"
 if [ -n "$LAST_PROJECT" ] && [ "$LAST_PROJECT" != "$CURRENT_PROJECT" ] && [ "$LAST_PROJECT" != "unknown" ]; then
   PROJECT_SWITCHED="true"
@@ -617,7 +698,18 @@ today_breaks: ${TODAY_BREAKS}
 sass_level: ${SASS_LEVEL}
 body_battery: ${BODY_BATTERY}
 consecutive_coding_days: ${CONSECUTIVE_DAYS}
-prompt_count_since_nudge: ${PROMPT_COUNT}"
+prompt_count_since_nudge: ${PROMPT_COUNT}
+total_screen_time_min: ${TOTAL_SCREEN_MIN}"
+
+  # Cross-session context
+  if [ -n "$ACTIVE_PROJECTS" ]; then
+    OUTPUT="${OUTPUT}
+active_projects: ${ACTIVE_PROJECTS}"
+  fi
+  if [ "$PARALLEL_SESSIONS" -gt 1 ]; then
+    OUTPUT="${OUTPUT}
+parallel_sessions: ${PARALLEL_SESSIONS}"
+  fi
 
   # Conditional fields
   if [ "$FRUSTRATION_SCORE" -ge 2 ]; then
@@ -765,6 +857,14 @@ away_min: $BREAK_GAP_MIN"
       if [ "$BURNOUT_WARNING" = "true" ]; then
         GREETING_HINTS="$GREETING_HINTS
 burnout_warning: true"
+      fi
+      if [ "$TOTAL_SCREEN_MIN" -gt 0 ]; then
+        GREETING_HINTS="$GREETING_HINTS
+total_screen_time_min: $TOTAL_SCREEN_MIN"
+      fi
+      if [ -n "$ACTIVE_PROJECTS" ]; then
+        GREETING_HINTS="$GREETING_HINTS
+active_projects: $ACTIVE_PROJECTS"
       fi
 
       cat <<EOCOMP
