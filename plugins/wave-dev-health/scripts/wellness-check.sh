@@ -328,7 +328,6 @@ SESSION_MINUTES=$(( (NOW - SESSION_START) / 60 ))
 # What is the user working on across all sessions?
 ACTIVE_PROJECTS=""
 PARALLEL_SESSIONS=1
-TOTAL_SCREEN_MIN=0
 
 if [ -f "$TODAY_LOG" ]; then
   CUTOFF_30M=$((NOW - 1800))
@@ -340,32 +339,6 @@ if [ -f "$TODAY_LOG" ]; then
   # Parallel sessions: distinct PIDs with activity in last 5 min
   PARALLEL_SESSIONS=$(awk -v c="$CUTOFF_5M" '$1 >= c {print $6}' "$TODAY_LOG" 2>/dev/null | sort -u | wc -l | tr -d ' ')
   [ "$PARALLEL_SESSIONS" -lt 1 ] && PARALLEL_SESSIONS=1
-
-  # Total screen time today: first prompt to now, minus gaps of 10+ min
-  TOTAL_SCREEN_MIN=$(python3 -c "
-import sys
-entries = []
-for line in open('$TODAY_LOG'):
-    parts = line.strip().split()
-    if len(parts) >= 2:
-        try: entries.append(int(parts[0]))
-        except: pass
-if not entries:
-    print(0)
-    sys.exit()
-entries.sort()
-total = 0
-prev = entries[0]
-for ts in entries[1:]:
-    gap = ts - prev
-    if gap < 600:  # < 10 min = active
-        total += gap
-    prev = ts
-# Add time from last entry to now (if recent)
-if $NOW - entries[-1] < 600:
-    total += $NOW - entries[-1]
-print(total // 60)
-" 2>/dev/null || echo "0")
 fi
 
 # ── Auto-detect break from ACTUAL idle time (CROSS-SESSION) ──────
@@ -616,11 +589,9 @@ DRAIN=0
     }
   }
 }
-# Total screen time today
-[ "$TOTAL_SCREEN_MIN" -ge 360 ] && DRAIN=$((DRAIN + 25)) || {
-  [ "$TOTAL_SCREEN_MIN" -ge 240 ] && DRAIN=$((DRAIN + 15)) || {
-    [ "$TOTAL_SCREEN_MIN" -ge 120 ] && DRAIN=$((DRAIN + 8))
-  }
+# Today's nudge load (proxy for how long you've been pushing without breaks)
+[ "$TODAY_NUDGES" -ge 6 ] && DRAIN=$((DRAIN + 20)) || {
+  [ "$TODAY_NUDGES" -ge 3 ] && DRAIN=$((DRAIN + 10))
 }
 # Late night penalty (energy naturally lower)
 HOUR_NUM=$((10#$HOUR))
@@ -754,7 +725,7 @@ PERSONALIZATION RULES:
 tier: ${NUDGE_TIER}
 nudge_reason: ${NUDGE_REASON}
 session_duration_min: ${SESSION_MINUTES}
-total_screen_time_min: ${TOTAL_SCREEN_MIN}
+
 today_nudges: ${TODAY_NUDGES}
 today_breaks: ${TODAY_BREAKS}
 sass_level: ${SASS_LEVEL}
@@ -895,8 +866,6 @@ if [ -n "$COMPANION_TYPE" ]; then
   # Build companion output — Claude does the analysis, we provide context
   # Common context block for all companion types
   COMPANION_CONTEXT=""
-  [ "$TOTAL_SCREEN_MIN" -gt 0 ] && COMPANION_CONTEXT="${COMPANION_CONTEXT}
-total_screen_time_min: $TOTAL_SCREEN_MIN"
   [ -n "$ACTIVE_PROJECTS" ] && COMPANION_CONTEXT="${COMPANION_CONTEXT}
 active_projects: $ACTIVE_PROJECTS"
   [ "$PARALLEL_SESSIONS" -gt 1 ] && COMPANION_CONTEXT="${COMPANION_CONTEXT}
