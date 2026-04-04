@@ -148,10 +148,18 @@ if [ -n "$DOMINANT_FOCUS" ] && [ "$DOMINANT_FOCUS" != "" ]; then
 fi
 
 # ── Cross-session tracking ───────────────────────────────────────
-# Touch global_active on every prompt. mtime = last activity across ALL sessions.
-# This is how we detect real breaks (no prompt in ANY session for 10+ min).
+# Read global_active mtime FIRST (for idle detection), THEN touch it.
+# If we touch first, idle time is always ~0 and breaks are never detected.
 CURRENT_PROJECT="${CLAUDE_PROJECT_DIR:-unknown}"
 PROJECT_BASE=$(basename "$CURRENT_PROJECT")
+
+# Read mtime BEFORE touching (used later in idle time computation)
+GLOBAL_ACTIVE_TS=0
+if [ -f "$GLOBAL_ACTIVE" ]; then
+  GLOBAL_ACTIVE_TS=$(python3 -c "import os; print(int(os.path.getmtime('$GLOBAL_ACTIVE')))" 2>/dev/null || echo "0")
+fi
+
+# Now touch it (marks this prompt as latest activity)
 touch "$GLOBAL_ACTIVE" 2>/dev/null || true
 
 # Append to daily activity log (tracks what user is working on across sessions)
@@ -256,14 +264,7 @@ STREAK_SHOWN=${STREAK_SHOWN:-0}; CONSECUTIVE_DAYS=${CONSECUTIVE_DAYS:-1}
 LAST_SESSION_PID=${LAST_SESSION_PID:-0}; LAST_SESSION_DURATION=${LAST_SESSION_DURATION:-0}
 
 # ── Compute ACTUAL idle time (CROSS-SESSION) ─────────────────────
-# Uses global_active file mtime: the last prompt in ANY session.
-# This means prompting in Session B resets the idle clock for Session A too.
-# Fallback: per-session claude_done_ts or last_prompt_ts.
-GLOBAL_ACTIVE_TS=0
-if [ -f "$GLOBAL_ACTIVE" ]; then
-  GLOBAL_ACTIVE_TS=$(python3 -c "import os; print(int(os.path.getmtime('$GLOBAL_ACTIVE')))" 2>/dev/null || echo "0")
-fi
-
+# GLOBAL_ACTIVE_TS was read earlier (before touching the file).
 # Use the most recent signal: global_active, claude_done_ts, or last_prompt_ts
 # Guard: if all are 0 (first ever run), IDLE_REFERENCE stays 0 and IDLE_TIME stays 0.
 IDLE_REFERENCE=0
