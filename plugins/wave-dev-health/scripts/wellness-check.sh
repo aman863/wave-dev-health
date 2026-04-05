@@ -645,8 +645,11 @@ parallel_sessions: $PARALLEL_SESSIONS"
   case "$COMPANION_TYPE" in
     session_start)
       EXTRA=""
-      [ "$DOW" -ge 6 ] && EXTRA="${EXTRA}
-weekend: true"
+      if [ "$DOW" -ge 6 ]; then
+        DAY_NAME=$(date +%A)
+        EXTRA="${EXTRA}
+weekend: $DAY_NAME"
+      fi
       [ "$CONSECUTIVE_DAYS" -ge 3 ] && EXTRA="${EXTRA}
 coding_streak_days: $CONSECUTIVE_DAYS"
       [ "$RETURNING_AFTER_BREAK" = "true" ] && EXTRA="${EXTRA}
