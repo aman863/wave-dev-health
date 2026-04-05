@@ -22,6 +22,8 @@ def analyze():
     sessions = 0
     breaks_by_day = defaultdict(int)
     prompts_by_day = defaultdict(int)
+    day_first_ts = {}   # first prompt timestamp per day
+    day_last_ts = {}    # last prompt timestamp per day
     longest_stretch = 0
     longest_stretch_day = ""
     zero_break_days = []
@@ -54,6 +56,10 @@ def analyze():
                                     days_active.add(day)
                                     prompts_by_day[day] += 1
                                     total_prompts += 1
+                                    if day not in day_first_ts or epoch < day_first_ts[day]:
+                                        day_first_ts[day] = epoch
+                                    if day not in day_last_ts or epoch > day_last_ts[day]:
+                                        day_last_ts[day] = epoch
                         except:
                             pass
             except:
@@ -86,9 +92,10 @@ def analyze():
         print("  No recent session data found. Wave will start tracking now.")
         return
 
-    # Find zero-break days
+    # Find zero-break days (only flag if 60+ min of coding, not short sessions)
     for day in sorted(days_active):
-        if breaks_by_day.get(day, 0) == 0 and prompts_by_day.get(day, 0) >= 5:
+        span = (day_last_ts.get(day, 0) - day_first_ts.get(day, 0)) // 60
+        if breaks_by_day.get(day, 0) == 0 and span >= 60:
             zero_break_days.append(day)
 
     total_breaks = sum(breaks_by_day.values())
@@ -98,7 +105,7 @@ def analyze():
     # Print onboarding snapshot
     print()
     print("  ┌──────────────────────────────────────────┐")
-    print("  │        Your last 7 days of coding        │")
+    print("  │         Your past week of coding         │")
     print("  └──────────────────────────────────────────┘")
     print()
     print(f"  {len(days_active)} days active  ·  {sessions} sessions  ·  {total_prompts} prompts")
