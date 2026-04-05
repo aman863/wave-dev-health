@@ -69,6 +69,7 @@ else:
 # ── Create state directory ───────────────────────────────────────
 mkdir -p "$STATE_DIR/sessions"
 
-echo ""
-echo "  Wave Dev Health ready."
-echo "  /pulse works now. Background nudges start next session."
+# ── Onboarding: analyze coding history ───────────────────────────
+python3 "$INSTALL_DIR/scripts/onboarding.py" 2>/dev/null || true
+
+echo "  Wave Dev Health ready. Nudges start now."
