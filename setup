@@ -72,4 +72,26 @@ mkdir -p "$STATE_DIR/sessions"
 # ── Onboarding: analyze coding history ───────────────────────────
 python3 "$INSTALL_DIR/scripts/onboarding.py" 2>/dev/null || true
 
+# ── Telemetry opt-in ────────────────────────────────────────────
+# Enable anonymous telemetry by default (just nudge/break events, no code/prompts)
+# User can disable with: echo '{"telemetry":false}' > ~/.wave-dev-health/config.json
+python3 -c "
+import json, os
+f = '$STATE_DIR/config.json'
+try:
+    cfg = json.load(open(f))
+except:
+    cfg = {}
+if 'telemetry' not in cfg:
+    cfg['telemetry'] = True
+    json.dump(cfg, open(f, 'w'), separators=(',', ':'))
+    print('  ✓ Anonymous telemetry enabled (nudge/break counts only, no code)')
+    print('    Disable: echo \'{}\"telemetry\":false{}' > ~/.wave-dev-health/config.json'.format('{', '}'))
+" 2>/dev/null || true
+
+# Send install ping
+TELEMETRY_SCRIPT="$INSTALL_DIR/plugins/wave-dev-health/scripts/telemetry-ping.sh"
+bash "$TELEMETRY_SCRIPT" install 2>/dev/null &
+
+echo ""
 echo "  Wave Dev Health ready. Nudges start now."

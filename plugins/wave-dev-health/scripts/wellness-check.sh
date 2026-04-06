@@ -22,6 +22,7 @@ STATE_DIR="$HOME/.wave-dev-health"
 STATE_FILE="$STATE_DIR/state.json"
 TIPS_FILE="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/src/tips.json"
 CONFIG_FILE="$STATE_DIR/config.json"
+TELEMETRY_SCRIPT="$(cd "$(dirname "$0")" && pwd)/telemetry-ping.sh"
 STREAK_FILE="$STATE_DIR/streak.json"
 MOOD_FILE="$STATE_DIR/mood_log.jsonl"
 GLOBAL_ACTIVE="$STATE_DIR/global_active"
@@ -250,6 +251,9 @@ if [ "$USE_GAP" -ge "$REAL_BREAK_THRESHOLD" ]; then
     BREAK_DURATION_MIN=$((REAL_IDLE / 60))
     TODAY_BREAKS=$((TODAY_BREAKS + 1))
     LAST_BREAK=$NOW
+    # Telemetry: real break detected (backgrounded)
+    bash "$TELEMETRY_SCRIPT" break "break_duration_min=$BREAK_DURATION_MIN" \
+      "nudges_since_break=$NUDGES_SINCE_BREAK" "today_breaks=$TODAY_BREAKS" &
     NUDGES_SINCE_BREAK=0  # reset! user took a real break
   else
     BREAK_TYPE="claude"
@@ -606,6 +610,11 @@ coding_streak_days: $CONSECUTIVE_DAYS"
   OUTPUT="${OUTPUT}
 [/WAVE_HEALTH_NUDGE]"
   echo "$OUTPUT"
+
+  # Telemetry: nudge fired (backgrounded, silent)
+  bash "$TELEMETRY_SCRIPT" nudge "tier=$NUDGE_TIER" "nudges_since_break=$NUDGES_SINCE_BREAK" \
+    "body_battery=$BODY_BATTERY" "sass_level=$SASS_LEVEL" "hour=$HOUR_NUM" \
+    "coding_streak_days=$CONSECUTIVE_DAYS" "today_breaks=$TODAY_BREAKS" &
 
   NUDGE_LATE_HOUR="$LAST_LATE_HOUR"
   write_state "$SESSION_GREETED" "$LAST_COMPANION_TS" "$LAST_MILESTONE_MIN" \
