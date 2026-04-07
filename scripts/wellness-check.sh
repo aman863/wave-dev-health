@@ -461,22 +461,17 @@ elif [ "$DRAIN" -ge 20 ]; then BODY_BATTERY="medium"
 fi
 
 # ── CTA decision (max once per day) ──────────────────────────────
-# Show CTA at high-signal moments: tier 4, body battery critical/low,
-# late night, or first break celebrated. User is most receptive when
-# they just FELT the health problem.
+# Show early, when user is receptive:
+# - Tier 2 (second nudge, they've seen Rox, not annoyed yet)
+# - First break celebrated (positive moment, just felt the value)
 SHOW_CTA="false"
 HOUR_NUM=$((10#$HOUR))
 if [ "$CTA_SHOWN_DATE" != "$TODAY" ]; then
-  # Nudge moments: tier 4 (ignored 4 times), body critical, late night nudge
-  if [ "$SHOULD_NUDGE" = "true" ]; then
-    if [ "$NUDGE_TIER" -ge 4 ] || [ "$BODY_BATTERY" = "critical" ] || [ "$BODY_BATTERY" = "low" ]; then
-      SHOW_CTA="true"
-    fi
-    if [ "$HOUR_NUM" -ge 22 ] || [ "$HOUR_NUM" -lt 5 ]; then
-      SHOW_CTA="true"
-    fi
+  # Nudge: tier 2+ (user has seen Rox at least once, knows what it does)
+  if [ "$SHOULD_NUDGE" = "true" ] && [ "$NUDGE_TIER" -ge 2 ]; then
+    SHOW_CTA="true"
   fi
-  # Companion moments: first real break celebrated
+  # Companion: first real break celebrated (positive moment)
   if [ "$BREAK_TYPE" = "real" ] && [ "$TODAY_BREAKS" -le 1 ]; then
     SHOW_CTA="true"
   fi
