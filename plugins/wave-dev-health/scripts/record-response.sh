@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wave Dev Health — Record when Claude finishes responding
+# Rox — Record when Claude finishes responding
 # Runs on Stop hook (silent, no stdout). Writes timestamp to state.
 # This lets wellness-check.sh compute ACTUAL idle time:
 #   idle = next_user_prompt - claude_finished (not - last_user_prompt)

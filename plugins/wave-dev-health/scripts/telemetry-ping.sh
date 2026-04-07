@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wave Dev Health — Telemetry ping
+# Rox — Telemetry ping
 # Sends anonymous usage events. No prompts, no code, no project names.
 # Only runs if telemetry is enabled in config.json.
 # Always backgrounded, silent, fire-and-forget.

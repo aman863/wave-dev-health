@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wave Dev Health — First run analysis
+# Rox — First run analysis
 # Scans existing Claude Code sessions to build an instant health profile.
 # Output is injected as system context — Claude presents it as a welcome message.
 #
@@ -25,7 +25,7 @@ if [ ! -d "$SESSIONS_DIR" ]; then
   cat <<'WELCOME'
 [WAVE_HEALTH_WELCOME]
 type: new_user
-message: This is your first time using Claude Code (or no session history found). Wave Dev Health is now running in the background. As you code, it will learn your patterns and nudge you with health tips at the right moments. No setup needed. Just code.
+message: This is your first time using Claude Code (or no session history found). Rox is now running in the background. As you code, it will learn your patterns and nudge you with health tips at the right moments. No setup needed. Just code.
 commands: /pulse (stats), /pulse dashboard (visual), /pulse report (weekly), /pulse break (log a break)
 [/WAVE_HEALTH_WELCOME]
 WELCOME
@@ -201,7 +201,7 @@ if [ "$ANALYSIS" = "NO_DATA" ] || [ -z "$ANALYSIS" ]; then
   cat <<'WELCOME'
 [WAVE_HEALTH_WELCOME]
 type: new_user
-message: Wave Dev Health is now active. It will learn your coding patterns and nudge you with health tips at the right moments. No setup needed.
+message: Rox is now active. It will learn your coding patterns and nudge you with health tips at the right moments. No setup needed.
 commands: /pulse (stats), /pulse dashboard (visual), /pulse report (weekly), /pulse break (log a break)
 [/WAVE_HEALTH_WELCOME]
 WELCOME
@@ -217,7 +217,7 @@ analysis:
 $ANALYSIS
 
 instructions_for_claude: |
-  This is the user's FIRST time with Wave Dev Health. Present their coding health
+  This is the user's FIRST time with Rox. Present their coding health
   profile as a personalized welcome message. Make it feel like "whoa, it already
   knows me." Use the analysis data above to generate a profile that covers:
 

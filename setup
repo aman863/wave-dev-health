@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wave Dev Health — setup
+# Rox — setup
 # Creates skill symlink + registers background nudge hook
 set -e
 
@@ -94,4 +94,4 @@ TELEMETRY_SCRIPT="$INSTALL_DIR/plugins/wave-dev-health/scripts/telemetry-ping.sh
 bash "$TELEMETRY_SCRIPT" install 2>/dev/null &
 
 echo ""
-echo "  Wave Dev Health ready. Nudges start now."
+echo "  Rox ready. Nudges start now."

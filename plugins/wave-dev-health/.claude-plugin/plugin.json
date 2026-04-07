@@ -1,5 +1,5 @@
 {
   "name": "wave-dev-health",
-  "description": "Developer health companion. Tracks coding sessions, delivers context-aware health nudges, and builds a local health profile. Powered by Wave.",
+  "description": "Developer health companion. Tracks coding sessions, delivers context-aware health nudges, and builds a local health profile. Powered by Rox.",
   "version": "0.1.0"
 }

@@ -1,4 +1,4 @@
-# Wave Dev Health
+# Rox
 
 A developer health companion for Claude Code. Runs silently in the background, detects breaks, tracks your session across projects, and delivers contextual health nudges that Claude personalizes to what you're actually working on.
 
@@ -64,4 +64,4 @@ rm ~/.wave-dev-health/debug       # Disable (back to normal)
 
 ---
 
-Powered by [Wave](https://wavehealth.app)
+Powered by [Rox](https://wavehealth.app)

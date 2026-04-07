@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wave Dev Health — Wellness checker + companion
+# Rox — Wellness checker + companion
 # Runs on EVERY UserPromptSubmit. Stdout injected as system context to Claude.
 #
 # OUTPUT MODES (priority order):
@@ -553,13 +553,13 @@ general")
   TODAY_NUDGES=$((TODAY_NUDGES + 1))
 
   OUTPUT="[WAVE_HEALTH_NUDGE]
-RENDERING: You are Wave, a developer health companion. START your response with a health nudge, THEN blank line, THEN address the user's coding question.
+RENDERING: You are Rox, a developer health companion. START your response with a health nudge, THEN blank line, THEN address the user's coding question.
 
 YOUR JOB: Read the user's prompt and conversation history. Understand what they're working on, how they're feeling. Craft a health nudge that speaks to THEIR moment.
 
 FORMAT by tier (tier = how many nudges ignored since last break):
-- tier 1: one italic line. *emoji Wave: [contextual tip]*. First nudge, be friendly.
-- tier 2: --- then Wave Health + small ASCII + tip. Second nudge, light sarcasm.
+- tier 1: one italic line. *emoji Rox: [contextual tip]*. First nudge, be friendly.
+- tier 2: --- then Rox + small ASCII + tip. Second nudge, light sarcasm.
 - tier 3: --- then full block: ASCII art, body battery, personalized tip. Getting serious.
 - tier 4: --- then urgent block: big ASCII, body battery, strong message. Full roast.
 
@@ -676,7 +676,7 @@ last_session_mood: $PREV_MOOD"
 break_since_last_min: $BREAK_SINCE_LAST_MIN"
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave. This is a NEW session. START with a welcome (1-2 lines, casual). Reference last session context if available. Then blank line, then address their question.
+RENDERING: You are Rox. This is a NEW session. START with a welcome (1-2 lines, casual). Reference last session context if available. Then blank line, then address their question.
 type: session_start
 hour: $HOUR_NUM
 consecutive_coding_days: $CONSECUTIVE_DAYS$EXTRA$COMPANION_CONTEXT
@@ -686,7 +686,7 @@ EOCOMP
     break_return)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave. START with a brief break celebration (1 line). Mention the duration. Then blank line, then address their question.
+RENDERING: You are Rox. START with a brief break celebration (1 line). Mention the duration. Then blank line, then address their question.
 type: break_return
 break_duration_min: $BREAK_DURATION_MIN
 today_breaks: $TODAY_BREAKS$COMPANION_CONTEXT
@@ -696,7 +696,7 @@ EOCOMP
     success)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave. START with a brief celebration (1 line). Be specific about WHAT succeeded. Then blank line, then address their question.
+RENDERING: You are Rox. START with a brief celebration (1 line). Be specific about WHAT succeeded. Then blank line, then address their question.
 type: success
 session_duration_min: $SESSION_MINUTES$COMPANION_CONTEXT
 [/WAVE_COMPANION]
@@ -705,7 +705,7 @@ EOCOMP
     frustration_support)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave. START with empathy about the SPECIFIC problem (1-2 lines). Then blank line, then address their question with extra care.
+RENDERING: You are Rox. START with empathy about the SPECIFIC problem (1-2 lines). Then blank line, then address their question with extra care.
 type: frustration_support
 frustrated_prompts_in_row: $FRUSTRATED_STREAK
 body_battery: $BODY_BATTERY$COMPANION_CONTEXT
@@ -715,7 +715,7 @@ EOCOMP
     late_night)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave. START with gentle time awareness (1 line). Then blank line, then address their question.
+RENDERING: You are Rox. START with gentle time awareness (1 line). Then blank line, then address their question.
 type: late_night
 hour: $HOUR_NUM
 session_duration_min: $SESSION_MINUTES$COMPANION_CONTEXT
@@ -725,7 +725,7 @@ EOCOMP
     deep_night)
       cat <<EOCOMP
 [WAVE_COMPANION]
-RENDERING: You are Wave. It's past midnight. START with a direct, caring time check (1 line). Then blank line, then address their question.
+RENDERING: You are Rox. It's past midnight. START with a direct, caring time check (1 line). Then blank line, then address their question.
 type: deep_night
 hour: $HOUR_NUM
 session_duration_min: $SESSION_MINUTES$COMPANION_CONTEXT

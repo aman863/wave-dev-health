@@ -10,7 +10,7 @@ sessions = []
 
 if not os.path.isdir(base):
     print("  No Claude Code sessions found yet.")
-    print("  Start coding and Wave Dev Health will track your patterns.")
+    print("  Start coding and Rox will track your patterns.")
     print("")
     exit()
 
@@ -80,7 +80,7 @@ for f in glob.glob(f"{base}/*/*.jsonl"):
 
 if not sessions:
     print("  No coding sessions found yet.")
-    print("  Start coding and Wave Dev Health will track your patterns.")
+    print("  Start coding and Rox will track your patterns.")
     print("")
     exit()
 
@@ -195,7 +195,7 @@ peak_str = ", ".join(f"{h}:00" for h, _ in peak)
 # ── Write full profile to markdown file ──────────────────────────
 md = f"""# Your Coding Health Profile
 
-*Analyzed from your Claude Code session history by Wave Dev Health*
+*Analyzed from your Claude Code session history by Rox*
 
 ---
 
@@ -264,7 +264,7 @@ That's **~{total_prompts:,} prompts** and **~{total_hours} hours** of coding.
 
 ---
 
-## How Wave Dev Health Helps
+## How Rox Helps
 
 This plugin runs silently in the background. It reads your prompts, detects your mood, and nudges you with health tips at exactly the right moment.
 
@@ -296,7 +296,7 @@ This plugin runs silently in the background. It reads your prompts, detects your
 
 ---
 
-*Powered by [Wave](https://wave.so/health) — AI health companion*
+*Powered by [Rox](https://wave.so/health) — AI health companion*
 """
 
 with open(profile_path, 'w') as f:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wave Dev Health — Onboarding analysis
+"""Rox — Onboarding analysis
 Scans last 7 days of Claude Code sessions and prints a quick health snapshot.
 Runs during setup. No data leaves the machine."""
 
@@ -14,7 +14,7 @@ WEEK_AGO = NOW - 7 * 86400
 def analyze():
     if not os.path.isdir(PROJECTS_DIR):
         print("  No Claude Code session history found. That's fine.")
-        print("  Wave will start tracking from your next session.")
+        print("  Rox will start tracking from your next session.")
         return
 
     days_active = set()
@@ -89,7 +89,7 @@ def analyze():
                     )
 
     if total_prompts == 0:
-        print("  No recent session data found. Wave will start tracking now.")
+        print("  No recent session data found. Rox will start tracking now.")
         return
 
     # Find zero-break days (only flag if 60+ min of coding, not short sessions)
@@ -134,25 +134,25 @@ def analyze():
     if stretch_min >= 120:
         print(f"  Your longest stretch was {stretch_min} min without a break.")
         print("  Blood flow to your legs drops ~50% after 90 min of sitting.")
-        print("  Wave will nudge you before that happens.")
+        print("  Rox will nudge you before that happens.")
     elif len(zero_break_days) >= 2:
         print(f"  {len(zero_break_days)} days with zero breaks in the last week.")
         print("  Your body doesn't have garbage collection.")
-        print("  Wave will remind you to take out the trash.")
+        print("  Rox will remind you to take out the trash.")
     elif avg_breaks < 2:
         print(f"  Averaging {avg_breaks:.1f} breaks per day.")
         print("  Research says 1 break per hour keeps your brain sharp.")
-        print("  Wave will help you get there.")
+        print("  Rox will help you get there.")
     else:
         print(f"  {avg_breaks:.1f} breaks/day. Not bad.")
-        print("  Wave will help you stay consistent.")
+        print("  Rox will help you stay consistent.")
 
     print()
     print("  How it works:")
     print("  · Every 20 min without a real break, you get a nudge")
     print("  · Ignore it? Next one gets sassier (4 tiers of escalation)")
     print("  · Take a 5+ min break? Resets to friendly. We celebrate.")
-    print("  · No commands. No dashboards. Just code. Wave watches.")
+    print("  · No commands. No dashboards. Just code. Rox watches.")
     print()
 
 
@@ -161,4 +161,4 @@ if __name__ == "__main__":
         analyze()
     except Exception as e:
         print(f"  Could not analyze sessions: {e}")
-        print("  Wave will start tracking from your next session.")
+        print("  Rox will start tracking from your next session.")

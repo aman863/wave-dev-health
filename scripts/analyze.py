@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Wave Dev Health — Coding Health Impact Analysis
+Rox — Coding Health Impact Analysis
 Scans Claude Code sessions. Interprets every pattern through a health lens.
 Not "you coded 352 sessions." Instead: "you sat without moving for 248 hours."
 """
@@ -261,21 +261,21 @@ else:
 if bad_count > 0:
     worst = [f for f in findings if f[3] == "bad"][0]
     action_text = {
-        "break": "Start with one rule: stand up every 60 minutes. Set a timer if you need to. Wave Dev Health will do this for you automatically.",
+        "break": "Start with one rule: stand up every 60 minutes. Set a timer if you need to. Rox will do this for you automatically.",
         "rest": "Take tomorrow off from coding. Not to be lazy. Because your wrists, eyes, and brain need a day to repair. Then aim for 2 rest days per week.",
         "sleep": "Stop coding by 10:30pm for one week. See how your next morning feels. The code will still be there tomorrow. You will write it better after sleep.",
-    }.get(worst[0], "Install Wave Dev Health and let it nudge you at the right moments.")
+    }.get(worst[0], "Install Rox and let it nudge you at the right moments.")
 elif warn_count > 0:
     first_warn = [f for f in findings if f[3] == "warn"][0]
     action_text = {
-        "break": "You are close to good habits. The sessions where you go 90+ minutes are the ones to fix. Wave Dev Health catches these automatically.",
+        "break": "You are close to good habits. The sessions where you go 90+ minutes are the ones to fix. Rox catches these automatically.",
         "rest": "Try to keep your coding streak under 5 days. Your body repairs during rest, not during work.",
         "sleep": "Watch for consecutive late nights. One late session is fine. Three in a row degrades your output.",
         "stress": "Next time you are stuck for 20+ minutes, stand up and walk for 5 minutes. The answer comes faster when you stop forcing it.",
-        "eyes": "The 20-20-20 rule works. Every 20 min, look 20 feet away for 20 seconds. Wave Dev Health reminds you.",
-    }.get(first_warn[0], "Wave Dev Health will nudge you at the right moments.")
+        "eyes": "The 20-20-20 rule works. Every 20 min, look 20 feet away for 20 seconds. Rox reminds you.",
+    }.get(first_warn[0], "Rox will nudge you at the right moments.")
 else:
-    action_text = "Keep going. Wave Dev Health runs in the background and catches the days when your habits slip."
+    action_text = "Keep going. Rox runs in the background and catches the days when your habits slip."
 
 # Findings HTML
 findings_html = ""
@@ -364,7 +364,7 @@ html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Coding Health Impact Analysis | Wave Dev Health</title>
+<title>Coding Health Impact Analysis | Rox</title>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <style>
@@ -515,7 +515,7 @@ body::before{{content:'';position:fixed;top:-300px;left:50%;transform:translateX
 <div class="c">
 
 <div class="hdr">
-  <div class="badge">Wave Dev Health</div>
+  <div class="badge">Rox</div>
   <h1>How Your Coding Affects Your Body</h1>
   <p class="sub">Based on {T:,} sessions over {span} days of Claude Code usage</p>
 </div>
@@ -559,21 +559,21 @@ body::before{{content:'';position:fixed;top:-300px;left:50%;transform:translateX
 <div class="sec rv">
   <h2 class="eyes">Screen Time and Your Eyes</h2>
   <p class="desc">Your eyes were locked on a screen for <strong>{eye_hours} hours</strong>. When you read code, you blink about 60% less than normal. Over {span} days, that adds up to roughly <strong>{blinks_missed:,} missed blinks</strong>, which is why your eyes feel dry, tired, or blurry by evening.</p>
-  <details class="learn"><summary>Why this matters</summary><div class="sci">Normal blink rate is 15-20 times per minute. While reading code or debugging, it drops to 4-7. Each missed blink means your eye surface dries a tiny bit more. Over hours, this causes <strong>dry eye syndrome, headaches, and blurred vision</strong>. The fix is simple: every 20 minutes, look at something 20 feet away for 20 seconds. This relaxes the focusing muscle inside your eye and triggers a few full blinks. Wave Dev Health nudges you every 20 minutes with this reminder.</div></details>
+  <details class="learn"><summary>Why this matters</summary><div class="sci">Normal blink rate is 15-20 times per minute. While reading code or debugging, it drops to 4-7. Each missed blink means your eye surface dries a tiny bit more. Over hours, this causes <strong>dry eye syndrome, headaches, and blurred vision</strong>. The fix is simple: every 20 minutes, look at something 20 feet away for 20 seconds. This relaxes the focusing muscle inside your eye and triggers a few full blinks. Rox nudges you every 20 minutes with this reminder.</div></details>
 </div>
 
 <div class="sec rv">
   <h2 class="sleep">When You Code</h2>
   <p class="desc">Your sessions grouped by time of day. <strong>Late night coding (after 10pm) affects your sleep quality</strong>, which affects your code quality the next day.</p>
   <div id="blocks"></div>
-  <details class="learn"><summary>Why late night matters</summary><div class="sci">Your brain produces melatonin (the sleep hormone) when it gets dark. Screen light after 10pm can <strong>cut melatonin production by up to 50%</strong>. This reduces deep sleep, REM sleep, and memory consolidation. The code you wrote today gets processed while you sleep. Bad sleep = the learning does not stick. Wave Dev Health nudges you gently after 11pm and more directly after 2am.</div></details>
+  <details class="learn"><summary>Why late night matters</summary><div class="sci">Your brain produces melatonin (the sleep hormone) when it gets dark. Screen light after 10pm can <strong>cut melatonin production by up to 50%</strong>. This reduces deep sleep, REM sleep, and memory consolidation. The code you wrote today gets processed while you sleep. Bad sleep = the learning does not stick. Rox nudges you gently after 11pm and more directly after 2am.</div></details>
 </div>
 
 <div class="sec rv">
   <h2 class="recovery">Rest Days and Recovery</h2>
   <p class="desc">You coded <strong>{active_days} out of {span} days</strong>. That is only <strong>{rest_days} days off</strong>. Your longest stretch was <strong>{max_streak} days in a row</strong> without taking a single day off from coding.</p>
   <div id="hm" class="hm" style="margin-bottom:10px"></div>
-  <details class="learn"><summary>Why this matters</summary><div class="sci">{"<strong>"+str(max_streak)+" days without rest is a serious concern.</strong> " if max_streak >= 10 else ""}Your wrists, forearms, shoulders, and eyes are doing repetitive motions for hours every day. Without rest days, <strong>tiny amounts of damage accumulate</strong> faster than your body can repair them. This is exactly how RSI (repetitive strain injury) develops: not from one bad day, but from many days in a row without recovery. Professional athletes train 5 days and rest 2. Your hands deserve the same. Wave Dev Health warns you when your streak hits 7+ days.</div></details>
+  <details class="learn"><summary>Why this matters</summary><div class="sci">{"<strong>"+str(max_streak)+" days without rest is a serious concern.</strong> " if max_streak >= 10 else ""}Your wrists, forearms, shoulders, and eyes are doing repetitive motions for hours every day. Without rest days, <strong>tiny amounts of damage accumulate</strong> faster than your body can repair them. This is exactly how RSI (repetitive strain injury) develops: not from one bad day, but from many days in a row without recovery. Professional athletes train 5 days and rest 2. Your hands deserve the same. Rox warns you when your streak hits 7+ days.</div></details>
 </div>
 
 <div class="sec rv">
@@ -583,12 +583,12 @@ body::before{{content:'';position:fixed;top:-300px;left:50%;transform:translateX
     <div class="dw"><svg viewBox="0 0 128 128">{donut_svg}</svg><div class="dc"><div class="dn">Mood</div><div class="ds">breakdown</div></div></div>
     <div class="mleg">{mood_legend}</div>
   </div>
-  {('<details class="learn" style="margin-top:14px"><summary>Why this matters</summary><div class="sci">Your frustrated sessions last <strong>'+str(frust_ratio)+'x longer</strong> than your building sessions ('+str(frust_dur)+' min vs '+str(build_dur)+' min). When you hit a wall, you do not stop. You keep going. The problem: frustration triggers your stress response. Your shoulders tense, your jaw clenches, your breathing gets shallow, and your body floods with cortisol. A 5-minute walk during a debugging session <strong>actually helps you solve the problem faster</strong> because it lets your subconscious process while your body resets. Wave Dev Health reads your prompts and detects when you are frustrated. After 3 frustrated prompts in a row, it intervenes.</div></details>') if frust_ratio > 2 and len(frust_s) > 2 else '<details class="learn"><summary>Why this matters</summary><div class="sci">Frustration triggers your stress response: tense shoulders, shallow breathing, jaw clenching. When you notice you are grinding on something for over 30 minutes without progress, stepping away for 5 minutes helps more than staring for another hour. Wave Dev Health detects frustration from your prompt text and intervenes early.</div></details>'}
+  {('<details class="learn" style="margin-top:14px"><summary>Why this matters</summary><div class="sci">Your frustrated sessions last <strong>'+str(frust_ratio)+'x longer</strong> than your building sessions ('+str(frust_dur)+' min vs '+str(build_dur)+' min). When you hit a wall, you do not stop. You keep going. The problem: frustration triggers your stress response. Your shoulders tense, your jaw clenches, your breathing gets shallow, and your body floods with cortisol. A 5-minute walk during a debugging session <strong>actually helps you solve the problem faster</strong> because it lets your subconscious process while your body resets. Rox reads your prompts and detects when you are frustrated. After 3 frustrated prompts in a row, it intervenes.</div></details>') if frust_ratio > 2 and len(frust_s) > 2 else '<details class="learn"><summary>Why this matters</summary><div class="sci">Frustration triggers your stress response: tense shoulders, shallow breathing, jaw clenching. When you notice you are grinding on something for over 30 minutes without progress, stepping away for 5 minutes helps more than staring for another hour. Rox detects frustration from your prompt text and intervenes early.</div></details>'}
 </div>
 
 
 <div class="sec rv">
-  <h2 class="body">What Wave Dev Health Does About This</h2>
+  <h2 class="body">What Rox Does About This</h2>
   <div class="fg">
     <div class="ft"><div class="tm">Every 20 min</div><div class="ds2">Eye break. 20-20-20 rule. Prevents the dry-eye cascade.</div></div>
     <div class="ft"><div class="tm">Every 35 min</div><div class="ds2">Hydration + posture. Counters dehydration and slouching.</div></div>
@@ -615,7 +615,7 @@ body::before{{content:'';position:fixed;top:-300px;left:50%;transform:translateX
 
 <div class="ftr">
   <p style="color:var(--t2);font-size:13px">All data stays on your machine. Nothing sent anywhere. Ever.</p>
-  <p>Powered by <a href="https://wave.so/health">Wave</a></p>
+  <p>Powered by <a href="https://wave.so/health">Rox</a></p>
 </div>
 
 </div>
