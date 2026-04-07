@@ -23,7 +23,6 @@ STATE_FILE="$STATE_DIR/state.json"
 TIPS_FILE="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}/src/tips.json"
 CONFIG_FILE="$STATE_DIR/config.json"
 TELEMETRY_SCRIPT="$(cd "$(dirname "$0")" && pwd)/telemetry-ping.sh"
-STREAK_FILE="$STATE_DIR/streak.json"
 MOOD_FILE="$STATE_DIR/mood_log.jsonl"
 GLOBAL_ACTIVE="$STATE_DIR/global_active"
 TODAY_LOG="$STATE_DIR/today_activity.log"
@@ -141,7 +140,7 @@ LAST_PROJECT=""; LAST_PROMPT_TS=0; FRUSTRATED_STREAK=0
 LAST_BODY_AREA=""; CLAUDE_DONE_TS=0; NUDGES_SINCE_BREAK=0
 SESSION_GREETED="false"; LAST_COMPANION_TS=0; LAST_MILESTONE_MIN=0
 LAST_LATE_HOUR=-1; LAST_SUCCESS_TS=0; LAST_MOOD_SUPPORT_TS=0
-STREAK_SHOWN=0; PREV_MOOD=""; LAST_SESSION_PID=0
+PREV_MOOD=""; LAST_SESSION_PID=0
 LAST_SESSION_DURATION=0; LAST_SESSION_PROJECT=""
 
 if [ -f "$STATE_FILE" ]; then
@@ -180,7 +179,7 @@ p('LAST_MILESTONE_MIN', d.get('last_milestone_min', 0))
 p('LAST_LATE_HOUR', d.get('last_late_hour', -1))
 p('LAST_SUCCESS_TS', d.get('last_success_ts', 0))
 p('LAST_MOOD_SUPPORT_TS', d.get('last_mood_support_ts', 0))
-p('STREAK_SHOWN', d.get('streak_shown', 0))
+
 p('PREV_MOOD', d.get('prev_mood', ''))
 p('LAST_SESSION_PID', d.get('last_session_pid', 0))
 p('LAST_SESSION_DURATION', d.get('last_session_duration', 0))
@@ -201,7 +200,6 @@ LAST_PROMPT_TS=${LAST_PROMPT_TS:-0}; FRUSTRATED_STREAK=${FRUSTRATED_STREAK:-0}
 CLAUDE_DONE_TS=${CLAUDE_DONE_TS:-0}; LAST_COMPANION_TS=${LAST_COMPANION_TS:-0}
 LAST_MILESTONE_MIN=${LAST_MILESTONE_MIN:-0}; LAST_LATE_HOUR=${LAST_LATE_HOUR:--1}
 LAST_SUCCESS_TS=${LAST_SUCCESS_TS:-0}; LAST_MOOD_SUPPORT_TS=${LAST_MOOD_SUPPORT_TS:-0}
-STREAK_SHOWN=${STREAK_SHOWN:-0}; CONSECUTIVE_DAYS=${CONSECUTIVE_DAYS:-1}
 LAST_SESSION_PID=${LAST_SESSION_PID:-0}; LAST_SESSION_DURATION=${LAST_SESSION_DURATION:-0}
 NUDGES_SINCE_BREAK=${NUDGES_SINCE_BREAK:-0}
 
@@ -309,26 +307,6 @@ if [ -n "$LAST_PROJECT" ] && [ "$LAST_PROJECT" != "$CURRENT_PROJECT" ] && [ "$LA
   PROJECT_SWITCHED="true"
 fi
 
-# Consecutive days (streak)
-if [ -f "$STREAK_FILE" ]; then
-  CONSECUTIVE_DAYS=$(grep -o '"consecutive_days":[0-9]*' "$STREAK_FILE" 2>/dev/null | grep -o '[0-9]*' || echo "0")
-  LAST_ACTIVE_DATE=$(grep -o '"last_active_date":"[^"]*"' "$STREAK_FILE" 2>/dev/null | grep -o '"[^"]*"$' | tr -d '"' || echo "")
-  if [ "$LAST_ACTIVE_DATE" != "$TODAY" ]; then
-    YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null || echo "")
-    if [ "$LAST_ACTIVE_DATE" = "$YESTERDAY" ]; then
-      CONSECUTIVE_DAYS=$((CONSECUTIVE_DAYS + 1))
-    else
-      CONSECUTIVE_DAYS=1
-    fi
-    TMPFILE=$(mktemp "$STATE_DIR/streak.XXXXXX")
-    echo "{\"consecutive_days\":$CONSECUTIVE_DAYS,\"last_active_date\":\"$TODAY\"}" > "$TMPFILE"
-    mv "$TMPFILE" "$STREAK_FILE"
-  fi
-else
-  CONSECUTIVE_DAYS=1
-  echo "{\"consecutive_days\":1,\"last_active_date\":\"$TODAY\"}" > "$STREAK_FILE"
-fi
-
 # Frustrated streak
 if [ "$FRUSTRATION_SCORE" -ge 2 ]; then
   FRUSTRATED_STREAK=$((FRUSTRATED_STREAK + 1))
@@ -348,11 +326,6 @@ if [ "$LAST_BREAK" -gt 0 ]; then
   CURRENT_STRETCH=$(( (NOW - LAST_BREAK) / 60 ))
 fi
 
-# Burnout signal
-BURNOUT_WARNING="false"
-if [ "$CONSECUTIVE_DAYS" -ge 7 ] && [ "$TODAY_NUDGES" -eq 0 ]; then
-  BURNOUT_WARNING="true"
-fi
 
 # Log mood (every 5th prompt)
 if [ $((PROMPT_COUNT % 5)) -eq 0 ] && [ "$PROMPT_LEN" -gt 0 ]; then
@@ -414,16 +387,6 @@ if [ -z "$COMPANION_TYPE" ]; then
   if [ "$SESSION_MINUTES" -ge "$NEXT_MILESTONE" ] && [ "$NEXT_MILESTONE" -ge 60 ]; then
     COMPANION_TYPE="milestone"
   fi
-fi
-
-# 7. Streak milestone
-if [ -z "$COMPANION_TYPE" ] && [ "$PROMPT_COUNT" -le 1 ]; then
-  for SC in 3 5 7 14 30; do
-    if [ "$CONSECUTIVE_DAYS" -ge "$SC" ] && [ "$STREAK_SHOWN" -lt "$SC" ]; then
-      COMPANION_TYPE="streak"
-      break
-    fi
-  done
 fi
 
 # General companion cooldown
@@ -498,10 +461,10 @@ fi
 
 # Helper: write state
 write_state() {
-  local SG="$1" LCT="$2" LMM="$3" LLH="$4" LST="$5" LMST="$6" SS="$7" LN="$8" LND="$9" PC="${10}" LBA="${11}"
+  local SG="$1" LCT="$2" LMM="$3" LLH="$4" LST="$5" LMST="$6" LN="$7" LND="$8" PC="$9" LBA="${10}"
   TMPFILE=$(mktemp "$STATE_DIR/state.XXXXXX")
   cat > "$TMPFILE" <<EOJSON
-{"version":5,"last_nudge":$LN,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LND","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PC,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LBA","nudges_since_break":$NUDGES_SINCE_BREAK,"session_greeted":$SG,"last_companion_ts":$LCT,"last_milestone_min":$LMM,"last_late_hour":$LLH,"last_success_ts":$LST,"last_mood_support_ts":$LMST,"streak_shown":$SS,"prev_mood":"$MOOD","last_session_pid":$CURRENT_PPID,"last_session_duration":$LAST_SESSION_DURATION,"last_session_project":"$LAST_SESSION_PROJECT"}
+{"version":6,"last_nudge":$LN,"last_tip_index":$LAST_TIP_INDEX,"last_nudge_date":"$LND","session_start":$SESSION_START,"today_nudges":$TODAY_NUDGES,"today_breaks":$TODAY_BREAKS,"last_break":$LAST_BREAK,"prompt_count":$PC,"last_project":"$CURRENT_PROJECT","last_prompt_ts":$NOW,"frustrated_streak":$FRUSTRATED_STREAK,"last_body_area":"$LBA","nudges_since_break":$NUDGES_SINCE_BREAK,"session_greeted":$SG,"last_companion_ts":$LCT,"last_milestone_min":$LMM,"last_late_hour":$LLH,"last_success_ts":$LST,"last_mood_support_ts":$LMST,"prev_mood":"$MOOD","last_session_pid":$CURRENT_PPID,"last_session_duration":$LAST_SESSION_DURATION,"last_session_project":"$LAST_SESSION_PROJECT"}
 EOJSON
   mv "$TMPFILE" "$STATE_FILE"
 }
@@ -575,7 +538,6 @@ today_nudges: ${TODAY_NUDGES}
 today_breaks: ${TODAY_BREAKS}
 sass_level: ${SASS_LEVEL}
 body_battery: ${BODY_BATTERY}
-coding_streak_days: ${CONSECUTIVE_DAYS}
 base_tip: ${TIP_TEXT}"
 
   [ -n "$ACTIVE_PROJECTS" ] && OUTPUT="${OUTPUT}
@@ -595,15 +557,10 @@ auto_break_detected: true
 break_duration_min: ${BREAK_DURATION_MIN}"
   [ "$CURRENT_STRETCH" -gt 0 ] && OUTPUT="${OUTPUT}
 current_unbroken_stretch_min: ${CURRENT_STRETCH}"
-  [ "$BURNOUT_WARNING" = "true" ] && OUTPUT="${OUTPUT}
-burnout_warning: true"
-
   if [ "$SESSION_GREETED" = "false" ]; then
     OUTPUT="${OUTPUT}
 first_prompt_of_session: true
 hour: $HOUR_NUM"
-    [ "$CONSECUTIVE_DAYS" -ge 3 ] && OUTPUT="${OUTPUT}
-coding_streak_days: $CONSECUTIVE_DAYS"
     SESSION_GREETED="true"
   fi
 
@@ -614,12 +571,12 @@ coding_streak_days: $CONSECUTIVE_DAYS"
   # Telemetry: nudge fired (backgrounded, silent)
   bash "$TELEMETRY_SCRIPT" nudge "tier=$NUDGE_TIER" "nudges_since_break=$NUDGES_SINCE_BREAK" \
     "body_battery=$BODY_BATTERY" "sass_level=$SASS_LEVEL" "hour=$HOUR_NUM" \
-    "coding_streak_days=$CONSECUTIVE_DAYS" "today_breaks=$TODAY_BREAKS" &
+    "today_breaks=$TODAY_BREAKS" &
 
   NUDGE_LATE_HOUR="$LAST_LATE_HOUR"
   write_state "$SESSION_GREETED" "$LAST_COMPANION_TS" "$LAST_MILESTONE_MIN" \
     "$NUDGE_LATE_HOUR" "$LAST_SUCCESS_TS" "$LAST_MOOD_SUPPORT_TS" \
-    "$STREAK_SHOWN" "$NOW" "$TODAY" "0" "$TIP_BODY_AREA"
+    "$NOW" "$TODAY" "0" "$TIP_BODY_AREA"
   exit 0
 fi
 
@@ -634,7 +591,6 @@ if [ -n "$COMPANION_TYPE" ]; then
   NEW_LATE_HOUR="$LAST_LATE_HOUR"
   NEW_SUCCESS_TS="$LAST_SUCCESS_TS"
   NEW_MOOD_TS="$LAST_MOOD_SUPPORT_TS"
-  NEW_STREAK_SHOWN="$STREAK_SHOWN"
 
   case "$COMPANION_TYPE" in
     session_start) NEW_GREETED="true" ;;
@@ -642,7 +598,6 @@ if [ -n "$COMPANION_TYPE" ]; then
     frustration_support) NEW_MOOD_TS="$NOW" ;;
     late_night|deep_night) NEW_LATE_HOUR="$HOUR_NUM" ;;
     milestone) NEW_MILESTONE="$SESSION_MINUTES" ;;
-    streak) NEW_STREAK_SHOWN="$CONSECUTIVE_DAYS" ;;
   esac
 
   COMPANION_CONTEXT=""
@@ -659,13 +614,9 @@ parallel_sessions: $PARALLEL_SESSIONS"
         EXTRA="${EXTRA}
 weekend: $DAY_NAME"
       fi
-      [ "$CONSECUTIVE_DAYS" -ge 3 ] && EXTRA="${EXTRA}
-coding_streak_days: $CONSECUTIVE_DAYS"
       [ "$RETURNING_AFTER_BREAK" = "true" ] && EXTRA="${EXTRA}
 returning: true
 away_min: $BREAK_SINCE_LAST_MIN"
-      [ "$BURNOUT_WARNING" = "true" ] && EXTRA="${EXTRA}
-burnout_warning: true"
       [ "$LAST_SESSION_DURATION" -gt 0 ] && EXTRA="${EXTRA}
 last_session_duration_min: $LAST_SESSION_DURATION"
       [ -n "$LAST_SESSION_PROJECT" ] && [ "$LAST_SESSION_PROJECT" != "unknown" ] && EXTRA="${EXTRA}
@@ -679,7 +630,7 @@ break_since_last_min: $BREAK_SINCE_LAST_MIN"
 RENDERING: You are Rox. This is a NEW session. START with a welcome (1-2 lines, casual). Reference last session context if available. Then blank line, then address their question.
 type: session_start
 hour: $HOUR_NUM
-consecutive_coding_days: $CONSECUTIVE_DAYS$EXTRA$COMPANION_CONTEXT
+$EXTRA$COMPANION_CONTEXT
 [/WAVE_COMPANION]
 EOCOMP
       ;;
@@ -743,22 +694,13 @@ body_battery: $BODY_BATTERY
 [/WAVE_COMPANION]
 EOCOMP
       ;;
-    streak)
-      cat <<EOCOMP
-[WAVE_COMPANION]
-RENDERING: START with a streak acknowledgment (1 line). $([ "$CONSECUTIVE_DAYS" -ge 7 ] && echo "Gently mention rest days.") Then blank line, then address their question.
-type: streak
-consecutive_days: $CONSECUTIVE_DAYS
-[/WAVE_COMPANION]
-EOCOMP
-      ;;
   esac
 
   SG_VAL="false"
   [ "$NEW_GREETED" = "true" ] && SG_VAL="true"
   write_state "$SG_VAL" "$NEW_COMPANION_TS" "$NEW_MILESTONE" \
     "$NEW_LATE_HOUR" "$NEW_SUCCESS_TS" "$NEW_MOOD_TS" \
-    "$NEW_STREAK_SHOWN" "$LAST_NUDGE" "${LAST_NUDGE_DATE:-$TODAY}" \
+    "$LAST_NUDGE" "${LAST_NUDGE_DATE:-$TODAY}" \
     "$PROMPT_COUNT" "$LAST_BODY_AREA"
   exit 0
 fi
@@ -768,6 +710,6 @@ fi
 # ─────────────────────────────────────────────────────────────────
 write_state "$SESSION_GREETED" "$LAST_COMPANION_TS" "$LAST_MILESTONE_MIN" \
   "$LAST_LATE_HOUR" "$LAST_SUCCESS_TS" "$LAST_MOOD_SUPPORT_TS" \
-  "$STREAK_SHOWN" "$LAST_NUDGE" "${LAST_NUDGE_DATE:-$TODAY}" \
+  "$LAST_NUDGE" "${LAST_NUDGE_DATE:-$TODAY}" \
   "$PROMPT_COUNT" "$LAST_BODY_AREA"
 exit 0

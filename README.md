@@ -16,7 +16,7 @@ A developer health companion for Claude Code. Runs silently in the background, d
    
    Take a real break → resets to friendly Tier 1.
 
-4. **Companion touches** — Beyond nudges, the companion responds to moments: session start (with last-session context), break celebrations, frustration support, success, late night awareness, coding streak milestones.
+4. **Companion touches** — Beyond nudges, the companion responds to moments: session start (with last-session context), break celebrations, frustration support, success, late night awareness.
 
 5. **Cross-session tracking** — Works across multiple parallel Claude sessions. Tracks what you're working on in each. A break only counts if ALL sessions are idle.
 
@@ -39,7 +39,6 @@ That's it. Background nudges and companion touches begin automatically.
 |--------|-----|----------|
 | Time since last break | Prompt gaps minus Claude processing | Nudge timing, body battery |
 | Nudges since last break | Counter, resets on real break | Tier escalation (1→4) |
-| Coding streak | Consecutive days with Claude usage | Streak milestones, burnout warning |
 | Cross-session activity | Shared activity log across all sessions | Parallel session detection |
 | Mood signals | Keyword heuristics (for trigger timing only) | Frustration companion, escalation |
 
@@ -50,7 +49,6 @@ Claude does the real mood/context analysis by reading your prompts. The keyword 
 All data stored locally at `~/.wave-dev-health/`. Nothing leaves your machine.
 
 - `state.json` — Session state, nudge timers, break tracking
-- `streak.json` — Consecutive coding days
 - `today_activity.log` — Cross-session activity timeline
 - `global_active` — Last activity timestamp (file mtime)
 - `shown_tips.json` — Tip rotation (no repeats)
